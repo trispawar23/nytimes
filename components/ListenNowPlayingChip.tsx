@@ -14,6 +14,7 @@ import type { Article } from "@/lib/types";
 import {
   dragEventCarriesArticle,
   getArticleIdFromDrag,
+  NYTIMES_ARTICLE_CARD_ATTR,
 } from "@/lib/article-dnd";
 import {
   buildArticleSpeechText,
@@ -32,6 +33,11 @@ const DRAG_GUIDE_FADE_DURATION_MS = 320;
 
 /** #6BA1DD at ~87% opacity — readable but shows content behind slightly */
 const DRAG_GUIDE_BLUE = "rgba(107, 161, 221, 0.87)";
+
+/** Finger must move this far before we treat the gesture as a drag (vs tap). */
+const TOUCH_DRAG_THRESHOLD_PX = 22;
+/** Extra hit slop around the dock column for releasing a finger. */
+const TOUCH_DROP_SLOP_PX = 16;
 
 type Props = {
   articles: Article[];
@@ -120,14 +126,22 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
     e.dataTransfer.dropEffect = "copy";
   }, []);
 
-  const onDrop = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      setDragHighlight(false);
-      const id = getArticleIdFromDrag(e.dataTransfer);
-      if (!id) return;
-      const article = articles.find((x) => x.id === id);
-      if (!article) return;
+  const dockColumnRef = useRef<HTMLDivElement>(null);
+  const touchDragRef = useRef<{
+    articleId: string | null;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  }>({
+    articleId: null,
+    startX: 0,
+    startY: 0,
+    dragging: false,
+  });
+  const suppressCardClickUntilRef = useRef(0);
+
+  const commitListenFromArticle = useCallback(
+    (article: Article) => {
       const speechText = buildArticleSpeechText(
         article.title,
         articleDisplayBody(article),
@@ -139,8 +153,121 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
       }).catch(() => {});
       dismissDragGuide();
     },
-    [articles, dismissDragGuide],
+    [dismissDragGuide],
   );
+
+  const onDrop = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setDragHighlight(false);
+      const id = getArticleIdFromDrag(e.dataTransfer);
+      if (!id) return;
+      const article = articles.find((x) => x.id === id);
+      if (!article) return;
+      commitListenFromArticle(article);
+    },
+    [articles, commitListenFromArticle],
+  );
+
+  useEffect(() => {
+    const ptInDockSlop = (clientX: number, clientY: number): boolean => {
+      const el = dockColumnRef.current;
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      const p = TOUCH_DROP_SLOP_PX;
+      return (
+        clientX >= r.left - p &&
+        clientX <= r.right + p &&
+        clientY >= r.top - p &&
+        clientY <= r.bottom + p
+      );
+    };
+
+    const cardSel = `[${NYTIMES_ARTICLE_CARD_ATTR}]`;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      const target = e.target as Element | null;
+      if (!target || !dockColumnRef.current) return;
+      if (dockColumnRef.current.contains(target)) return;
+      const card = target.closest(cardSel);
+      if (!card) return;
+      const id = card.getAttribute(NYTIMES_ARTICLE_CARD_ATTR)?.trim();
+      if (!id) return;
+      touchDragRef.current = {
+        articleId: id,
+        startX: e.clientX,
+        startY: e.clientY,
+        dragging: false,
+      };
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      const s = touchDragRef.current;
+      if (!s.articleId) return;
+      const dx = e.clientX - s.startX;
+      const dy = e.clientY - s.startY;
+      if (Math.hypot(dx, dy) >= TOUCH_DRAG_THRESHOLD_PX) {
+        s.dragging = true;
+      }
+      if (s.dragging) {
+        setDragHighlight(ptInDockSlop(e.clientX, e.clientY));
+      }
+    };
+
+    const resetTouchState = () => {
+      touchDragRef.current = {
+        articleId: null,
+        startX: 0,
+        startY: 0,
+        dragging: false,
+      };
+      setDragHighlight(false);
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      const s = touchDragRef.current;
+      const id = s.articleId;
+      const wasDragging = s.dragging;
+      resetTouchState();
+      if (!id || !wasDragging) return;
+      if (!ptInDockSlop(e.clientX, e.clientY)) return;
+      const article = articles.find((a) => a.id === id);
+      if (!article) return;
+      suppressCardClickUntilRef.current = Date.now() + 500;
+      commitListenFromArticle(article);
+    };
+
+    const onPointerCancel = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      resetTouchState();
+    };
+
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("pointermove", onPointerMove, true);
+    window.addEventListener("pointerup", onPointerUp, true);
+    window.addEventListener("pointercancel", onPointerCancel, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("pointermove", onPointerMove, true);
+      window.removeEventListener("pointerup", onPointerUp, true);
+      window.removeEventListener("pointercancel", onPointerCancel, true);
+    };
+  }, [articles, commitListenFromArticle]);
+
+  useEffect(() => {
+    const onClickCapture = (ev: MouseEvent) => {
+      if (Date.now() >= suppressCardClickUntilRef.current) return;
+      const el = ev.target as Element | null;
+      if (!el?.closest(`[${NYTIMES_ARTICLE_CARD_ATTR}]`)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+    };
+    document.addEventListener("click", onClickCapture, true);
+    return () => document.removeEventListener("click", onClickCapture, true);
+  }, []);
 
   const article =
     snap.meta && activeVisible
@@ -155,7 +282,10 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
       }}
       aria-live="polite"
     >
-      <div className="pointer-events-auto flex flex-col items-end gap-2">
+      <div
+        ref={dockColumnRef}
+        className="pointer-events-auto flex flex-col items-end gap-2"
+      >
         {showDragGuide ? (
           <div
             className={

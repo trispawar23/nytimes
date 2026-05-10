@@ -7,7 +7,7 @@
 }
 
 body {
-  @apply bg-[#eceae6] text-ink antialiased;
+  @apply min-h-dvh overflow-x-hidden bg-[#eceae6] text-ink antialiased;
 }
 
 /* Hide scrollbar for horizontal chips while keeping scroll */
