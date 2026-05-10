@@ -1,28 +1,13 @@
-/** Puter default (AWS Polly) rejects text longer than 3000 characters. */
-export const PUTER_TTS_MAX_CHARS = 3000;
-export const PUTER_SAFE_SLICE = 2950;
+/**
+ * Global “listen” session using the Web Speech API (`speechSynthesis`).
+ * No third-party accounts — works offline-capable per browser/OS voices.
+ */
+
+/** Very long text can stall some engines; trim with ellipsis for playback. */
+export const PUTER_TTS_MAX_CHARS = 6000;
+export const PUTER_SAFE_SLICE = 5900;
 
 export type PuterPlaybackPhase = "idle" | "loading" | "playing" | "error";
-
-type PuterTxt2Speech = NonNullable<
-  NonNullable<NonNullable<Window["puter"]>["ai"]>["txt2speech"]
->;
-
-function getTxt2Speech(): PuterTxt2Speech | undefined {
-  return typeof window !== "undefined"
-    ? window.puter?.ai?.txt2speech
-    : undefined;
-}
-
-export async function waitForTxt2Speech(maxMs: number): Promise<PuterTxt2Speech> {
-  const deadline = Date.now() + maxMs;
-  while (Date.now() < deadline) {
-    const fn = getTxt2Speech();
-    if (fn) return fn;
-    await new Promise((r) => setTimeout(r, 120));
-  }
-  throw new Error("Listen is still loading. Try again in a moment.");
-}
 
 export function buildArticleSpeechText(title: string, body: string): string {
   const t = title.trim();
@@ -40,18 +25,17 @@ export type PuterListenMeta = {
 
 let activeKey: string | null = null;
 let activePhase: PuterPlaybackPhase = "idle";
-let activeAudio: HTMLAudioElement | null = null;
+/** Tracks the utterance we attached handlers to (for stale onend guard). */
+let activeUtterance: SpeechSynthesisUtterance | null = null;
 let activeMeta: PuterListenMeta | null = null;
 
 export type PuterPlaybackSnapshot = {
   key: string | null;
   phase: PuterPlaybackPhase;
   meta: PuterListenMeta | null;
-  /** Audio loaded but user paused mid-playback */
   paused: boolean;
 };
 
-/** Snapshot reference updates only in `notify` for useSyncExternalStore. */
 let snapshot: PuterPlaybackSnapshot = {
   key: null,
   phase: "idle",
@@ -59,13 +43,14 @@ let snapshot: PuterPlaybackSnapshot = {
   paused: false,
 };
 
+function getSynth(): SpeechSynthesis | null {
+  if (typeof window === "undefined") return null;
+  return window.speechSynthesis ?? null;
+}
+
 function computePaused(): boolean {
-  return (
-    !!activeKey &&
-    !!activeAudio &&
-    activeAudio.paused &&
-    activePhase === "idle"
-  );
+  const syn = getSynth();
+  return !!activeKey && !!syn && syn.paused && syn.speaking;
 }
 
 function notify() {
@@ -87,46 +72,76 @@ export function getPuterPlaybackSnapshot(): PuterPlaybackSnapshot {
   return snapshot;
 }
 
-export function stopPuterPlayback(): void {
-  if (activeAudio) {
-    activeAudio.pause();
-    activeAudio.src = "";
-    activeAudio = null;
-  }
+function finishPlayback() {
+  activeUtterance = null;
   activeKey = null;
   activePhase = "idle";
   activeMeta = null;
   notify();
 }
 
-/** Mini-player pause / resume (same session). */
+export function stopPuterPlayback(): void {
+  const syn = getSynth();
+  if (syn) {
+    syn.cancel();
+  }
+  activeUtterance = null;
+  activeKey = null;
+  activePhase = "idle";
+  activeMeta = null;
+  notify();
+}
+
 export function togglePuterPlaybackPause(): void {
-  if (activePhase === "playing" && activeAudio && !activeAudio.paused) {
-    activeAudio.pause();
+  const syn = getSynth();
+  if (!syn || !activeKey) return;
+
+  if (syn.speaking && !syn.paused) {
+    syn.pause();
     activePhase = "idle";
     notify();
     return;
   }
-  if (
-    activeKey &&
-    activeAudio &&
-    activeAudio.paused &&
-    activeAudio.currentTime > 0 &&
-    !activeAudio.ended
-  ) {
-    void activeAudio.play();
+
+  if (syn.paused) {
+    syn.resume();
     activePhase = "playing";
     notify();
   }
 }
 
+/** Wait briefly for voices (iOS/Safari often populate after `voiceschanged`). */
+async function waitForVoices(maxMs: number): Promise<void> {
+  const syn = getSynth();
+  if (!syn) throw new Error("Speech synthesis is not available.");
+  const synthesis: SpeechSynthesis = syn;
+  if (synthesis.getVoices().length > 0) return;
+
+  await new Promise<void>((resolve) => {
+    const deadline = Date.now() + maxMs;
+    const tick = () => {
+      if (synthesis.getVoices().length > 0 || Date.now() >= deadline) {
+        cleanup();
+        resolve();
+      }
+    };
+    const id = window.setInterval(tick, 80);
+    synthesis.addEventListener("voiceschanged", tick);
+    function cleanup() {
+      window.clearInterval(id);
+      synthesis.removeEventListener("voiceschanged", tick);
+    }
+    tick();
+  });
+}
+
 export type RunPuterListenResult = {
-  /** True when a new synthesis request ran (not pause/resume only). */
   didStartNewPlayback: boolean;
 };
 
 /**
- * One global Puter listen session (reader or any feed). Same key toggles pause/resume.
+ * One global listen session (reader or feed). Same key toggles pause/resume.
+ * Uses browser text-to-speech — no Puter or other sign-in.
  */
 export async function runPuterListen(options: {
   key: string;
@@ -139,26 +154,25 @@ export async function runPuterListen(options: {
     throw new Error("No article text to read.");
   }
 
+  const syn = getSynth();
+  if (!syn) {
+    throw new Error("Speech synthesis is not available in this environment.");
+  }
+
   if (
     activeKey === key &&
     activePhase === "playing" &&
-    activeAudio &&
-    !activeAudio.paused
+    syn.speaking &&
+    !syn.paused
   ) {
-    activeAudio.pause();
+    syn.pause();
     activePhase = "idle";
     notify();
     return { didStartNewPlayback: false };
   }
 
-  if (
-    activeKey === key &&
-    activeAudio &&
-    activeAudio.paused &&
-    activeAudio.currentTime > 0 &&
-    !activeAudio.ended
-  ) {
-    await activeAudio.play();
+  if (activeKey === key && syn.paused && syn.speaking) {
+    syn.resume();
     activePhase = "playing";
     notify();
     return { didStartNewPlayback: false };
@@ -167,7 +181,7 @@ export async function runPuterListen(options: {
   stopPuterPlayback();
 
   const truncated = raw.length > PUTER_TTS_MAX_CHARS;
-  const textForApi = truncated
+  const textForSpeech = truncated
     ? `${raw.slice(0, PUTER_SAFE_SLICE).trim()}…`
     : raw;
 
@@ -177,25 +191,45 @@ export async function runPuterListen(options: {
   notify();
 
   try {
-    const tts = await waitForTxt2Speech(12_000);
-    const audio = await tts(textForApi);
-    activeAudio = audio;
-    activeKey = key;
-    audio.onended = () => {
-      if (activeAudio === audio) {
-        activeAudio = null;
-        activeKey = null;
-        activePhase = "idle";
-        activeMeta = null;
-        notify();
-      }
+    await waitForVoices(4000);
+
+    const utterance = new SpeechSynthesisUtterance(textForSpeech);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+
+    const voices = syn.getVoices();
+    const en =
+      voices.find((v) => v.lang.startsWith("en-US")) ??
+      voices.find((v) => v.lang.startsWith("en")) ??
+      voices[0];
+    if (en) utterance.voice = en;
+
+    activeUtterance = utterance;
+
+    utterance.onend = () => {
+      if (activeUtterance !== utterance) return;
+      finishPlayback();
     };
-    await audio.play();
+
+    utterance.onerror = () => {
+      if (activeUtterance !== utterance) return;
+      activeUtterance = null;
+      activeKey = null;
+      activeMeta = null;
+      activePhase = "error";
+      notify();
+      window.setTimeout(() => {
+        activePhase = "idle";
+        notify();
+      }, 4000);
+    };
+
+    syn.speak(utterance);
     activePhase = "playing";
     notify();
     return { didStartNewPlayback: true };
   } catch {
-    activeAudio = null;
+    activeUtterance = null;
     activeKey = null;
     activeMeta = null;
     activePhase = "error";
@@ -205,7 +239,7 @@ export async function runPuterListen(options: {
       notify();
     }, 4000);
     throw new Error(
-      "Could not start audio. If a window opened, complete sign-in there.",
+      "Could not start text-to-speech. Try another browser or device.",
     );
   }
 }

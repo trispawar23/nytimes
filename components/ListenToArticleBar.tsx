@@ -75,7 +75,7 @@ export function ListenToArticleBar({
       setErrorDetail(
         e instanceof Error
           ? e.message
-          : "Could not start audio. If a window opened, complete sign-in there.",
+          : "Could not start listening. This browser may not support text-to-speech.",
       );
       window.setTimeout(() => setErrorDetail(null), 5000);
     }

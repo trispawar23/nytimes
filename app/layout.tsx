@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -29,10 +28,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={poppins.variable}>
       <body className="min-h-dvh overflow-x-hidden font-sans antialiased">
-        <Script
-          src="https://js.puter.com/v2/"
-          strategy="afterInteractive"
-        />
         {children}
       </body>
     </html>
