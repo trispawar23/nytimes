@@ -1,0 +1,626 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Article, FeedMode, NewsFeedResult, SummarizeApiResult } from "@/lib/types";
+import type { SummaryResponse } from "@/lib/types";
+import {
+  askBriefCacheKey,
+  defaultBriefCacheKey,
+  readerDisplayBriefCacheKey,
+} from "@/lib/summary-cache-key";
+import { modeToTags } from "@/lib/news-query";
+import { orderArticlesForLongReadSections } from "@/lib/reading-stats";
+import { BottomNav } from "./BottomNav";
+import type { PanelStatus } from "./CatchMeUpPanel";
+import { CatchMeUpPanel } from "./CatchMeUpPanel";
+import { ArticleReaderScreen } from "./ArticleReaderScreen";
+import { CatchupFeed } from "./CatchupFeed";
+import { RelaxFeed } from "./RelaxFeed";
+import { DiscoverFeed } from "./DiscoverFeed";
+import { ForYouFeed } from "./ForYouFeed";
+import { ForYouHeader } from "./ForYouHeader";
+import { ListenNowPlayingChip } from "./ListenNowPlayingChip";
+import { PhoneFrame } from "./PhoneFrame";
+
+type BriefCacheEntry = {
+  data: SummaryResponse | null;
+  status: PanelStatus;
+  error?: string;
+};
+
+function mapSummarizeStatus(
+  result: SummarizeApiResult,
+): { panel: PanelStatus; data?: SummaryResponse | null; error?: string } {
+  if (!result.ok) {
+    if (result.code === "INSUFFICIENT_SOURCE") {
+      return { panel: "insufficient_source", data: null, error: result.error };
+    }
+    return { panel: "error", data: null, error: result.error };
+  }
+  const d = result.data;
+  const low = d.confidence < 0.45;
+  return {
+    panel: low ? "low_confidence" : "success",
+    data: d,
+  };
+}
+
+export default function ForYouClient() {
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsMessage, setNewsMessage] = useState<string | null>(null);
+
+  const [mode, setMode] = useState<FeedMode>("discover");
+  /** Discover-only: carousel layout vs classic Great Read / Daily feed. Toggled by tapping Discover again. */
+  const [discoverLayoutActive, setDiscoverLayoutActive] = useState(false);
+  const [selected, setSelected] = useState<Article | null>(null);
+  const [readerArticle, setReaderArticle] = useState<Article | null>(null);
+
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [readingTime, setReadingTime] = useState(3);
+  const [question, setQuestion] = useState("");
+  const [voiceActive, setVoiceActive] = useState(false);
+
+  const [panelStatus, setPanelStatus] = useState<PanelStatus>("idle");
+  const [summary, setSummary] = useState<SummaryResponse | null>(null);
+  const [summaryError, setSummaryError] = useState<string | undefined>();
+
+  /** Half-length (3 min) brief shown inline in the article reader — not the Catch Me Up sheet. */
+  const [readerMediumBrief, setReaderMediumBrief] = useState<{
+    status: PanelStatus;
+    data: SummaryResponse | null;
+    error?: string;
+  }>({ status: "idle", data: null });
+
+  /** One-minute (1 min) brief — inline reader layout with takeaway + author row. */
+  const [readerShortBrief, setReaderShortBrief] = useState<{
+    status: PanelStatus;
+    data: SummaryResponse | null;
+    error?: string;
+  }>({ status: "idle", data: null });
+
+  const modeRef = useRef(mode);
+  const readingTimeRef = useRef(readingTime);
+  modeRef.current = mode;
+  readingTimeRef.current = readingTime;
+
+  const briefCacheRef = useRef<Record<string, BriefCacheEntry>>({});
+  /** Bumps when a new `/api/news` payload loads so stale read-meta responses are ignored. */
+  const feedGenerationRef = useRef(0);
+
+  /** Great Read + The Daily prefer ~7 min body reads; reader modules keep full pool. */
+  const feedLayoutArticles = useMemo(
+    () => orderArticlesForLongReadSections(articles),
+    [articles],
+  );
+
+  const loadNews = useCallback(async () => {
+    feedGenerationRef.current += 1;
+    setNewsLoading(true);
+    setNewsMessage(null);
+    briefCacheRef.current = {};
+    setSummary(null);
+    setPanelStatus("idle");
+    setSummaryError(undefined);
+    setReaderMediumBrief({ status: "idle", data: null, error: undefined });
+    setReaderShortBrief({ status: "idle", data: null, error: undefined });
+    const params = new URLSearchParams();
+    params.set("tags", modeToTags(modeRef.current));
+    // Always bypass server feed cache from the browser. Navigation Timing often
+    // reports "navigate" (not "reload") under Next/Turbopack, so reload detection is unreliable.
+    params.set("refresh", "1");
+    params.set(
+      "rot",
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`,
+    );
+    try {
+      const res = await fetch(`/api/news?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const json = (await res.json()) as NewsFeedResult;
+      setArticles(json.articles);
+      if (!json.ok) {
+        setNewsMessage(json.error);
+      } else {
+        setNewsMessage(null);
+      }
+    } catch {
+      setArticles([]);
+      setNewsMessage("Could not load the feed.");
+    } finally {
+      setNewsLoading(false);
+    }
+  }, []);
+
+  /** Load on mount and whenever the feed mode changes (always fresh from wire). */
+  useEffect(() => {
+    void loadNews();
+  }, [mode, loadNews]);
+
+  /** Measure full-page read length for the top of feed so ~7 min ranking uses real text, not snippets. */
+  useEffect(() => {
+    if (newsLoading || articles.length === 0) return;
+
+    const candidates = articles
+      .filter(
+        (a) =>
+          a.readMinutesFromFetch === undefined &&
+          /^https?:\/\//i.test(a.url.trim()),
+      )
+      .slice(0, 18);
+
+    if (candidates.length === 0) return;
+
+    const gen = feedGenerationRef.current;
+    const ac = new AbortController();
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/articles-read-meta", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            articles: candidates.map((a) => ({
+              id: a.id,
+              url: a.url.trim(),
+              title: a.title,
+            })),
+          }),
+          signal: ac.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          results?: Array<
+            | { id: string; ok: true; minutes: number }
+            | { id: string; ok: false }
+          >;
+        };
+        if (feedGenerationRef.current !== gen) return;
+        const rows = json.results ?? [];
+        const map = new Map(rows.map((r) => [r.id, r]));
+        setArticles((prev) => {
+          if (feedGenerationRef.current !== gen) return prev;
+          return prev.map((a) => {
+            const hit = map.get(a.id);
+            if (!hit) return a;
+            if (hit.ok && typeof hit.minutes === "number" && hit.minutes > 0) {
+              return { ...a, readMinutesFromFetch: hit.minutes };
+            }
+            return { ...a, readMinutesFromFetch: null };
+          });
+        });
+      } catch {
+        /* aborted or network */
+      }
+    })();
+
+    return () => ac.abort();
+  }, [articles, newsLoading]);
+
+  useEffect(() => {
+    if (articles.length === 0) {
+      setSelected(null);
+      return;
+    }
+    setSelected((prev) => {
+      if (prev && articles.some((a) => a.id === prev.id)) return prev;
+      return feedLayoutArticles[0] ?? null;
+    });
+  }, [articles, feedLayoutArticles]);
+
+  useEffect(() => {
+    setReaderMediumBrief({ status: "idle", data: null, error: undefined });
+    setReaderShortBrief({ status: "idle", data: null, error: undefined });
+  }, [readerArticle?.id]);
+
+  /**
+   * When panel is open, sync from **default** brief cache for article × mode × current
+   * reading time (ref). Does not re-run when only `readingTime` changes so the slider
+   * stays local UI until the user explicitly generates again.
+   */
+  useEffect(() => {
+    if (!panelOpen || !selected) return;
+    const rt = readingTimeRef.current;
+    const k = defaultBriefCacheKey(selected.id, mode, rt);
+    const hit = briefCacheRef.current[k];
+    if (
+      hit?.data &&
+      (hit.status === "success" ||
+        hit.status === "low_confidence" ||
+        hit.status === "insufficient_source")
+    ) {
+      setSummary(hit.data);
+      setPanelStatus(hit.status);
+      setSummaryError(hit.error);
+    } else if (hit?.status === "error") {
+      setSummary(null);
+      setPanelStatus("error");
+      setSummaryError(hit.error);
+    } else {
+      setSummary(null);
+      setPanelStatus("idle");
+      setSummaryError(undefined);
+    }
+  }, [panelOpen, selected, mode]);
+
+  const summarize = useCallback(
+    async (opts: {
+      userQuery?: string;
+      articleOverride?: Article;
+      intent: "default" | "ask";
+      force?: boolean;
+      /** Use when parent state/ref may not reflect the rail yet (e.g. Medium / 3 min). */
+      readingTimeOverride?: number;
+      /** Inline reader vs Catch Me Up panel (panel remains default). */
+      applyTo?: "panel" | "reader_medium_inline" | "reader_short_inline";
+      /** Same text the reader shows (full fetch when available); avoids feed excerpt “too short”. */
+      bodyOverride?: string;
+    }) => {
+      const applyTo = opts.applyTo ?? "panel";
+      const art = opts.articleOverride ?? selected;
+      if (!art) return;
+      const m = modeRef.current;
+      const rt =
+        typeof opts.readingTimeOverride === "number"
+          ? opts.readingTimeOverride
+          : readingTimeRef.current;
+      const bodyRaw =
+        typeof opts.bodyOverride === "string"
+          ? opts.bodyOverride.trim()
+          : art.content.trim();
+      const qRaw = (opts.userQuery ?? "").trim();
+      const defaultCatchQuery =
+        "Produce a fresh briefing aligned to the selected mode and reading time.";
+      const askFallback = "Answer succinctly using only the article text.";
+      const requestQuery =
+        opts.intent === "ask" ? (qRaw || askFallback) : defaultCatchQuery;
+      const cacheKey =
+        opts.intent === "ask"
+          ? askBriefCacheKey(art.id, m, rt, requestQuery)
+          : typeof opts.bodyOverride === "string"
+            ? readerDisplayBriefCacheKey(art.id, m, rt, bodyRaw)
+            : defaultBriefCacheKey(art.id, m, rt);
+
+      const applyFromCache = (hit: BriefCacheEntry) => {
+        if (applyTo === "reader_medium_inline") {
+          setReaderMediumBrief({
+            status: hit.status,
+            data: hit.data,
+            error: hit.error,
+          });
+        } else if (applyTo === "reader_short_inline") {
+          setReaderShortBrief({
+            status: hit.status,
+            data: hit.data,
+            error: hit.error,
+          });
+        } else {
+          setPanelStatus(hit.status);
+          setSummary(hit.data);
+          setSummaryError(hit.error);
+        }
+      };
+
+      const setLoading = () => {
+        if (applyTo === "reader_medium_inline") {
+          setReaderMediumBrief((prev) => ({
+            ...prev,
+            status: "loading",
+            error: undefined,
+          }));
+        } else if (applyTo === "reader_short_inline") {
+          setReaderShortBrief((prev) => ({
+            ...prev,
+            status: "loading",
+            error: undefined,
+          }));
+        } else {
+          setPanelStatus("loading");
+          setSummaryError(undefined);
+        }
+      };
+
+      const applyMapped = (mapped: {
+        panel: PanelStatus;
+        data?: SummaryResponse | null;
+        error?: string;
+      }) => {
+        const entry: BriefCacheEntry = {
+          data: mapped.data ?? null,
+          status: mapped.panel,
+          error: mapped.error,
+        };
+        briefCacheRef.current[cacheKey] = entry;
+        if (applyTo === "reader_medium_inline") {
+          setReaderMediumBrief({
+            status: mapped.panel,
+            data: mapped.data ?? null,
+            error: mapped.error,
+          });
+        } else if (applyTo === "reader_short_inline") {
+          setReaderShortBrief({
+            status: mapped.panel,
+            data: mapped.data ?? null,
+            error: mapped.error,
+          });
+        } else {
+          setPanelStatus(mapped.panel);
+          setSummary(mapped.data ?? null);
+          setSummaryError(mapped.error);
+        }
+      };
+
+      if (!opts.force) {
+        const hit = briefCacheRef.current[cacheKey];
+        if (
+          hit?.data &&
+          (hit.status === "success" || hit.status === "low_confidence")
+        ) {
+          applyFromCache(hit);
+          return;
+        }
+        if (hit?.status === "insufficient_source") {
+          applyFromCache(hit);
+          return;
+        }
+        if (hit?.status === "error" && hit.error) {
+          applyFromCache(hit);
+          return;
+        }
+      }
+
+      console.log("[OPENAI API CALLED]", { cacheKey, applyTo });
+      setLoading();
+      try {
+        const res = await fetch("/api/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: art.title,
+            body: bodyRaw,
+            mode: m,
+            readingTimeMinutes: rt,
+            userQuery: requestQuery,
+          }),
+        });
+        const json = (await res.json()) as SummarizeApiResult;
+        const mapped = mapSummarizeStatus(json);
+        applyMapped(mapped);
+      } catch {
+        const entry: BriefCacheEntry = {
+          data: null,
+          status: "error",
+          error: "Network error while summarizing.",
+        };
+        briefCacheRef.current[cacheKey] = entry;
+        if (applyTo === "reader_medium_inline") {
+          setReaderMediumBrief({
+            status: "error",
+            data: null,
+            error: entry.error,
+          });
+        } else if (applyTo === "reader_short_inline") {
+          setReaderShortBrief({
+            status: "error",
+            data: null,
+            error: entry.error,
+          });
+        } else {
+          setPanelStatus("error");
+          setSummary(null);
+          setSummaryError(entry.error);
+        }
+      }
+    },
+    [selected],
+  );
+
+  const handleModeChange = useCallback(
+    (next: FeedMode) => {
+      if (next === "discover" && mode === "discover") {
+        setDiscoverLayoutActive((v) => !v);
+        return;
+      }
+      setMode(next);
+      if (next === "discover") {
+        setDiscoverLayoutActive(true);
+      }
+    },
+    [mode],
+  );
+
+  const handleHeaderVoice = useCallback(() => {
+    const art = selected ?? feedLayoutArticles[0];
+    if (!art) return;
+    if (!selected || selected.id !== art.id) {
+      setSelected(art);
+    }
+    setPanelOpen(true);
+    setVoiceActive(true);
+  }, [feedLayoutArticles, selected]);
+
+  const onVoiceToggle = useCallback(() => {
+    setVoiceActive((v) => !v);
+    setPanelOpen((open) => open || true);
+  }, []);
+
+  const briefingArticle = readerArticle ?? selected;
+
+  return (
+    <PhoneFrame>
+      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {readerArticle ? (
+          <ArticleReaderScreen
+            article={readerArticle}
+            feedArticles={articles}
+            readingTimeMinutes={readingTime}
+            readerMediumBrief={readerMediumBrief}
+            readerShortBrief={readerShortBrief}
+            onReadingTimeChange={setReadingTime}
+            onShortReadSelected={(displayBodyForSummary) => {
+              const art = readerArticle;
+              if (!art) return;
+              setSelected(art);
+              void summarize({
+                intent: "default",
+                force: false,
+                articleOverride: art,
+                readingTimeOverride: 1,
+                applyTo: "reader_short_inline",
+                bodyOverride: displayBodyForSummary,
+              });
+            }}
+            onMediumReadSelected={(displayBodyForSummary) => {
+              const art = readerArticle;
+              if (!art) return;
+              setSelected(art);
+              void summarize({
+                intent: "default",
+                force: false,
+                articleOverride: art,
+                readingTimeOverride: 3,
+                applyTo: "reader_medium_inline",
+                bodyOverride: displayBodyForSummary,
+              });
+            }}
+            onClose={() => setReaderArticle(null)}
+            onMicPress={() => {
+              setSelected(readerArticle);
+              setPanelOpen(true);
+              setVoiceActive(true);
+            }}
+            onSelectRelated={(a) => {
+              setReaderArticle(a);
+              setSelected(a);
+            }}
+          />
+        ) : (
+          <>
+            <ForYouHeader
+              mode={mode}
+              onModeChange={handleModeChange}
+              discoverHighlighted={
+                mode !== "discover" || discoverLayoutActive
+              }
+              greetingName={
+                typeof process.env.NEXT_PUBLIC_GREETING_NAME === "string" &&
+                process.env.NEXT_PUBLIC_GREETING_NAME.trim() !== ""
+                  ? process.env.NEXT_PUBLIC_GREETING_NAME.trim()
+                  : "there"
+              }
+              onVoicePress={handleHeaderVoice}
+              voiceDisabled={newsLoading || articles.length === 0}
+            />
+
+            <div
+              className={`relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain ${
+                mode === "catchup" ||
+                mode === "relax" ||
+                (mode === "discover" && discoverLayoutActive)
+                  ? "bg-[#F8F8F8]"
+                  : ""
+              }`}
+            >
+              {newsMessage ? (
+                <div className="mx-[16.44px] mb-2 mt-2 rounded-[10px] border border-amber-200 bg-amber-50/90 px-3 py-2 font-sans text-[11px] text-amber-950">
+                  {newsMessage}
+                </div>
+              ) : null}
+              {mode === "discover" && discoverLayoutActive ? (
+                <DiscoverFeed
+                  articles={feedLayoutArticles}
+                  selectedId={selected?.id ?? null}
+                  onSelect={(art) => {
+                    setSelected(art);
+                    setReaderArticle(art);
+                    setPanelOpen(false);
+                  }}
+                  loading={newsLoading}
+                />
+              ) : mode === "catchup" ? (
+                <CatchupFeed
+                  articles={feedLayoutArticles}
+                  selectedId={selected?.id ?? null}
+                  onSelect={(art) => {
+                    setSelected(art);
+                    setReaderArticle(art);
+                    setPanelOpen(false);
+                  }}
+                  loading={newsLoading}
+                />
+              ) : mode === "relax" ? (
+                <RelaxFeed
+                  articles={feedLayoutArticles}
+                  selectedId={selected?.id ?? null}
+                  onSelect={(art) => {
+                    setSelected(art);
+                    setReaderArticle(art);
+                    setPanelOpen(false);
+                  }}
+                  loading={newsLoading}
+                />
+              ) : (
+                <ForYouFeed
+                  articles={feedLayoutArticles}
+                  selectedId={selected?.id ?? null}
+                  onSelect={(art) => {
+                    setSelected(art);
+                    setReaderArticle(art);
+                    setPanelOpen(false);
+                  }}
+                  loading={newsLoading}
+                />
+              )}
+            </div>
+
+            <BottomNav active="you" />
+          </>
+        )}
+
+        <ListenNowPlayingChip
+          articles={articles}
+          onOpenArticle={(art) => {
+            setSelected(art);
+            setReaderArticle(art);
+            setPanelOpen(false);
+          }}
+        />
+
+        <CatchMeUpPanel
+          open={panelOpen}
+          onClose={() => {
+            setPanelOpen(false);
+            setVoiceActive(false);
+          }}
+          mode={mode}
+          status={panelStatus}
+          errorMessage={summaryError}
+          data={summary}
+          readingTimeMinutes={readingTime}
+          onReadingTimeChange={setReadingTime}
+          question={question}
+          onQuestionChange={setQuestion}
+          onAsk={() => {
+            if (!briefingArticle) return;
+            void summarize({
+              intent: "ask",
+              userQuery: question.trim(),
+              articleOverride: briefingArticle,
+            });
+          }}
+          voiceActive={voiceActive}
+          onVoiceToggle={onVoiceToggle}
+          onCatchMeUp={() => {
+            if (!briefingArticle) return;
+            void summarize({
+              intent: "default",
+              articleOverride: briefingArticle,
+            });
+          }}
+        />
+      </div>
+    </PhoneFrame>
+  );
+}

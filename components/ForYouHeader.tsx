@@ -1,0 +1,178 @@
+"use client";
+
+import {
+  ArrowUpRight,
+  BatteryFull,
+  Bookmark,
+  ChevronDown,
+  Mic,
+  Settings,
+  Wifi,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { ModeSelector } from "./ModeSelector";
+import type { FeedMode } from "@/lib/types";
+
+type Props = {
+  mode: FeedMode;
+  onModeChange: (m: FeedMode) => void;
+  /** Discover blue pill + expanded layout; false = classic feed in Discover mode. */
+  discoverHighlighted?: boolean;
+  greetingName?: string;
+  onVoicePress: () => void;
+  voiceDisabled?: boolean;
+};
+
+/** iOS-style cellular signal (right side of status bar). */
+function StatusSignalBars() {
+  const heightsPx = [3.5, 5.5, 8, 10.5];
+  return (
+    <span
+      className="flex h-[13px] shrink-0 items-end gap-[2.5px] pb-px"
+      aria-hidden
+    >
+      {heightsPx.map((h, i) => (
+        <span
+          key={i}
+          className="w-[2.5px] shrink-0 rounded-[0.5px] bg-black"
+          style={{ height: `${h}px` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** Lock-screen style `9:41` (12-hour clock, no AM/PM suffix). */
+function formatIosStatusTime(d: Date): string {
+  let h = d.getHours() % 12;
+  if (h === 0) h = 12;
+  const m = d.getMinutes().toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+function useStatusClock() {
+  const [label, setLabel] = useState(() => formatIosStatusTime(new Date()));
+  useEffect(() => {
+    const tick = () => setLabel(formatIosStatusTime(new Date()));
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return label;
+}
+
+/**
+ * Status row uses normal document flow + justify-between (not a fixed 242px gap)
+ * so it stays visible at any width. Safe-area padding for notched devices.
+ */
+export function ForYouHeader({
+  mode,
+  onModeChange,
+  discoverHighlighted = true,
+  greetingName = "there",
+  onVoicePress,
+  voiceDisabled,
+}: Props) {
+  const statusTime = useStatusClock();
+
+  return (
+    <header className="relative z-10 w-full shrink-0 rounded-t-[20.55px] bg-white text-black">
+      <div
+        className="relative z-30 flex w-full min-w-0 items-center justify-between px-[19.52px] pb-2 text-black"
+        data-app-status-bar
+        style={{
+          paddingTop: "max(10px, calc(env(safe-area-inset-top, 0px) + 8px))",
+        }}
+      >
+        <div className="flex min-w-0 shrink-0 items-center gap-[4px]">
+          <span className="whitespace-nowrap text-center font-['SF_Pro_Text',system-ui,sans-serif] text-[16.67px] font-semibold leading-none tabular-nums text-black">
+            {statusTime}
+          </span>
+          <ArrowUpRight
+            className="h-[12px] w-[12px] shrink-0 stroke-black text-black"
+            strokeWidth={2.75}
+            aria-hidden
+          />
+        </div>
+        <div
+          className="flex shrink-0 items-center gap-[6px] text-black"
+          aria-hidden
+        >
+          <StatusSignalBars />
+          <Wifi className="h-[14px] w-[14px] shrink-0" strokeWidth={2} />
+          <BatteryFull
+            className="h-[12px] w-[22px] shrink-0 fill-black stroke-black"
+            strokeWidth={1.25}
+          />
+        </div>
+      </div>
+
+      <div className="relative z-20 flex min-w-0 flex-col gap-[10.27px] px-[16.44px] pb-4 pt-[6px]">
+        <div className="flex w-full items-center gap-[10.27px]">
+          <p className="min-w-0 flex-1 font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[24.66px] font-light leading-[1.25] text-black">
+            Hi {greetingName},
+          </p>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              className="flex h-[28.77px] w-[24.66px] items-center justify-center text-black hover:opacity-70"
+              aria-label="Bookmarks"
+            >
+              <Bookmark className="h-5 w-5" strokeWidth={1.8} />
+            </button>
+            <button
+              type="button"
+              className="flex h-[28.77px] w-[28.77px] items-center justify-center text-black hover:opacity-70"
+              aria-label="Settings"
+            >
+              <Settings className="h-6 w-6" strokeWidth={1.7} />
+            </button>
+          </div>
+        </div>
+
+        <ModeSelector
+          value={mode}
+          onChange={onModeChange}
+          discoverHighlighted={discoverHighlighted}
+        />
+
+        <div className="flex w-full min-w-0 items-center justify-between gap-2 px-[10.27px]">
+          <div className="flex min-w-0 flex-wrap items-center gap-[10.27px]">
+            <button
+              type="button"
+              className="flex items-center gap-[10.27px] rounded-[12.33px] bg-white px-[10.27px] py-[5.14px] font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[14.38px] font-medium leading-[21.57px] text-black outline outline-1 -outline-offset-1 outline-[#E1E1E1] hover:bg-[#fafafa]"
+              style={{ outlineWidth: "1.027px" }}
+            >
+              Filters
+              <span className="relative inline-flex h-[24.66px] w-[24.66px] items-center justify-center p-[6px]">
+                <span className="absolute left-1/2 top-1/2 h-[1.8px] w-[12.63px] -translate-x-1/2 -translate-y-1/2 bg-black" />
+                <span className="absolute left-1/2 top-1/2 h-[12.63px] w-[1.8px] -translate-x-1/2 -translate-y-1/2 bg-black" />
+              </span>
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-[10.27px] rounded-[12.33px] bg-white px-[10.27px] py-[5.14px] font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[14.38px] font-medium leading-[21.57px] text-black outline outline-1 -outline-offset-1 outline-[#E1E1E1] hover:bg-[#fafafa]"
+              style={{ outlineWidth: "1.027px" }}
+            >
+              Sort by
+              <ChevronDown className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onVoicePress}
+            disabled={voiceDisabled}
+            className="flex size-[41.09px] shrink-0 items-center justify-center rounded-[20.55px] bg-black px-[9px] py-[8.22px] text-white drop-shadow-[2.055px_2.055px_3.6px_rgba(0,0,0,0.21)] disabled:opacity-35"
+            aria-label="Voice interaction"
+          >
+            <Mic
+              className="size-[22px] shrink-0 stroke-white text-white"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
