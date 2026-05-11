@@ -423,6 +423,14 @@ export default function ForYouClient() {
         setDiscoverLayoutActive((v) => !v);
         return;
       }
+      if (
+        (next === "relax" && mode === "relax") ||
+        (next === "catchup" && mode === "catchup")
+      ) {
+        setMode("discover");
+        setDiscoverLayoutActive(false);
+        return;
+      }
       setMode(next);
       if (next === "discover") {
         setDiscoverLayoutActive(true);

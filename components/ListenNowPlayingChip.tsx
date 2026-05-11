@@ -156,6 +156,13 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
     [dismissDragGuide],
   );
 
+  const playRandomArticleFromFeed = useCallback(() => {
+    if (articles.length === 0) return;
+    const article = articles[Math.floor(Math.random() * articles.length)];
+    if (!article) return;
+    commitListenFromArticle(article);
+  }, [articles, commitListenFromArticle]);
+
   const onDrop = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       e.preventDefault();
@@ -428,7 +435,10 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
             </button>
           </div>
           ) : (
-            <div
+            <button
+              type="button"
+              onClick={playRandomArticleFromFeed}
+              disabled={articles.length === 0}
               style={{
                 paddingLeft: 20,
                 paddingRight: 20,
@@ -440,8 +450,15 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
                 alignItems: "center",
                 gap: 25,
                 display: "inline-flex",
+                border: "none",
+                cursor: articles.length === 0 ? "not-allowed" : "pointer",
               }}
-              aria-label="Drop an article card here to listen"
+              className="shadow-[0_6px_24px_rgba(0,0,0,0.28)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/35 disabled:opacity-45"
+              aria-label={
+                articles.length === 0
+                  ? "No articles loaded yet"
+                  : "Play a random article from your feed, or drop an article card here to listen"
+              }
             >
               <div
                 style={{
@@ -453,11 +470,11 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
                 aria-hidden
               />
               <Play
-                className="pointer-events-none ml-0.5 size-[18px] shrink-0 fill-white text-white"
+                className="ml-0.5 size-[18px] shrink-0 fill-white text-white"
                 strokeWidth={2.5}
                 aria-hidden
               />
-            </div>
+            </button>
           )}
         </div>
       </div>

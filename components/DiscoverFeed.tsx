@@ -139,7 +139,7 @@ export function DiscoverFeed({
         <h2 className="font-sans text-[14px] font-bold leading-normal text-black">
           Articles For You
         </h2>
-        <div className="no-scrollbar -mx-1 flex items-stretch gap-[10px] overflow-x-auto px-1 pb-1">
+        <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full touch-pan-x items-stretch gap-[10px] overflow-x-auto overscroll-x-contain px-1 pb-1">
           {afy.map((a) => (
             <div
               key={a.id}
@@ -155,11 +155,11 @@ export function DiscoverFeed({
                 }
               }}
               aria-current={selectedId === a.id ? "true" : undefined}
-              className={`flex h-[229px] w-[360px] max-w-[calc(100vw-48px)] shrink-0 cursor-grab flex-col gap-[10px] rounded-sm bg-white p-[10px] text-left ${CARD_SHADOW} focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20 active:cursor-grabbing`}
+              className={`flex h-[229px] w-[360px] max-w-full shrink-0 cursor-grab flex-col gap-[10px] overflow-hidden rounded-sm bg-white p-[10px] text-left ${CARD_SHADOW} focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20 active:cursor-grabbing`}
             >
               {/* Header: title row + date (alignSelf stretch in spec) */}
-              <div className="flex w-full shrink-0 flex-col items-start justify-end gap-[10px]">
-                <div className="inline-flex w-full items-start gap-[10px]">
+              <div className="flex w-full min-w-0 shrink-0 flex-col items-start justify-end gap-[10px]">
+                <div className="flex w-full min-w-0 items-start gap-[10px]">
                   <p className="min-w-0 flex-1 break-words text-left font-serif text-[20px] font-normal leading-snug text-black">
                     {a.title}
                   </p>
@@ -170,13 +170,13 @@ export function DiscoverFeed({
                 </p>
               </div>
               {/* Body: 120×120 image | column summary + read row, gap 10 */}
-              <div className="inline-flex min-h-0 w-full flex-1 items-stretch gap-[10px]">
-                <div className="flex shrink-0 items-center justify-center">
+              <div className="flex min-h-0 w-full min-w-0 flex-1 items-stretch gap-[10px] overflow-hidden">
+                <div className="flex min-h-0 min-w-0 shrink-0 basis-[120px] items-center justify-center">
                   <SafeArticleImage
                     remoteUrl={a.imageUrl}
                     alt=""
-                    className="relative size-[120px] shrink-0 overflow-hidden bg-[#eee]"
-                    imgClassName="h-full w-full object-cover"
+                    className="relative size-[120px] max-h-[120px] max-w-[120px] overflow-hidden bg-[#eee]"
+                    imgClassName="h-full w-full max-h-full max-w-full object-cover"
                   />
                 </div>
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col items-start justify-between gap-[10px]">
@@ -200,7 +200,7 @@ export function DiscoverFeed({
           <h2 className="font-sans text-sm font-bold leading-normal text-black">
             Trending topics
           </h2>
-          <div className="flex w-full gap-2.5">
+          <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full snap-x snap-mandatory touch-pan-x gap-2.5 overflow-x-auto overscroll-x-contain px-1 pb-1 pr-3 [-webkit-overflow-scrolling:touch]">
             {trending.map((a) => (
               <button
                 key={a.id}
@@ -208,31 +208,36 @@ export function DiscoverFeed({
                 {...articleDragProps(a.id)}
                 onClick={() => onSelect(a)}
                 aria-current={selectedId === a.id ? "true" : undefined}
-                className={`flex min-h-[318px] min-w-0 cursor-grab flex-col justify-between bg-white p-2.5 text-left ${CARD_SHADOW} focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20 active:cursor-grabbing ${
-                  trending.length === 1 ? "w-full flex-none" : "flex-1"
+                className={`flex h-[318px] cursor-grab snap-start flex-col justify-between overflow-hidden bg-white p-[10px] text-left ${CARD_SHADOW} focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20 active:cursor-grabbing ${
+                  trending.length === 1
+                    ? "w-full min-w-0 max-w-full shrink-0"
+                    : "w-[248px] max-w-full shrink-0"
                 }`}
               >
-                <div className="flex flex-col gap-2.5">
-                  <SafeArticleImage
-                    remoteUrl={a.imageUrl}
-                    alt=""
-                    className="relative mx-auto size-[180px] shrink-0 overflow-hidden bg-[#eee]"
-                    imgClassName="h-full w-full object-cover"
-                  />
-                  <div className="flex w-full flex-col gap-2.5">
-                    <div className="flex w-full items-start justify-end gap-2.5">
-                      <p className="min-w-0 flex-1 break-words font-serif text-sm font-normal leading-snug text-black">
+                {/* Image + title/date */}
+                <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col items-center gap-[10px] overflow-hidden">
+                  <div className="flex w-full min-w-0 shrink-0 justify-center overflow-hidden">
+                    <SafeArticleImage
+                      remoteUrl={a.imageUrl}
+                      alt=""
+                      className="relative aspect-square size-[180px] max-h-[180px] min-w-0 max-w-full shrink-0 overflow-hidden bg-[#eee]"
+                      imgClassName="h-full w-full max-h-full max-w-full object-cover"
+                    />
+                  </div>
+                  <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col justify-start gap-[10px]">
+                    <div className="flex w-full min-w-0 items-start gap-[10px]">
+                      <p className="min-w-0 flex-1 break-words text-left font-serif text-sm font-normal leading-snug text-black line-clamp-6">
                         {a.title}
                       </p>
                       <SaveChip />
                     </div>
-                    <p className="font-sans text-[8px] font-normal text-[#7F7F7F]">
+                    <p className="w-full shrink-0 text-left font-sans text-[8px] font-normal leading-normal text-[#7F7F7F]">
                       {formatArticlesForYouDate(a.publishedAt)}
                     </p>
                   </div>
                 </div>
-                <div className="flex w-full items-center justify-between pt-1">
-                  <span className="font-sans text-xs font-medium text-black">
+                <div className="flex w-full min-w-0 shrink-0 items-center justify-between pt-1">
+                  <span className="min-w-0 truncate font-sans text-xs font-medium text-black">
                     {topicLabel(a.category)}
                   </span>
                   <ChevronRight
@@ -253,7 +258,7 @@ export function DiscoverFeed({
           <h2 className="font-sans text-[14px] font-bold leading-normal text-black">
             Find opinions
           </h2>
-          <div className="no-scrollbar -mx-1 flex items-stretch gap-4 overflow-x-auto px-1 pb-1">
+          <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full touch-pan-x items-stretch gap-4 overflow-x-auto overscroll-x-contain px-1 pb-1">
             {opinions.map((a) => {
               const minutes = Math.max(
                 1,
@@ -263,15 +268,15 @@ export function DiscoverFeed({
                 <div
                   key={a.id}
                   {...articleDragProps(a.id)}
-                  className={`w-[285px] shrink-0 cursor-grab bg-white p-[10px] text-left ${CARD_SHADOW} active:cursor-grabbing`}
+                  className={`flex w-[285px] max-w-full shrink-0 cursor-grab flex-col items-start gap-[10px] overflow-hidden bg-white p-[10px] text-left ${CARD_SHADOW} active:cursor-grabbing`}
                 >
-                  <div className="flex items-stretch gap-[10px]">
-                    <div className="relative h-[107px] w-[105px] shrink-0 overflow-hidden bg-[#eee]">
+                  <div className="flex w-full min-w-0 items-start gap-[10px] overflow-hidden">
+                    <div className="relative h-[107px] min-h-0 min-w-0 w-[105px] shrink-0 basis-[105px] overflow-hidden bg-[#eee]">
                       <SafeArticleImage
                         remoteUrl={a.imageUrl}
                         alt=""
-                        className="absolute inset-0 h-full w-full"
-                        imgClassName="h-full w-full object-cover"
+                        className="absolute inset-0 h-full w-full overflow-hidden"
+                        imgClassName="h-full w-full max-h-full max-w-full object-cover"
                       />
                       <button
                         type="button"
@@ -296,16 +301,19 @@ export function DiscoverFeed({
                       aria-current={
                         selectedId === a.id ? "true" : undefined
                       }
-                      className="flex w-[150px] min-w-0 flex-col justify-between gap-1 self-stretch text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+                      className="flex min-h-[107px] min-w-0 flex-1 flex-col justify-between gap-[10px] text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
                     >
-                      <p className="break-words text-left font-serif text-[18px] font-normal leading-snug text-black">
-                        {a.title}
-                      </p>
-                      <div className="flex w-full items-center justify-between font-sans text-[8px] font-normal leading-normal">
-                        <span className="text-[#7F7F7F]">
+                      <div className="flex w-full min-w-0 items-start gap-[10px]">
+                        <p className="min-w-0 flex-1 break-words text-left font-serif text-[18px] font-normal leading-snug text-black">
+                          {a.title}
+                        </p>
+                        <SaveChip />
+                      </div>
+                      <div className="flex w-full min-w-0 shrink-0 items-center justify-between font-sans text-[8px] font-normal leading-normal">
+                        <span className="shrink-0 text-[#7F7F7F]">
                           {formatShortMonthDay(a.publishedAt)}
                         </span>
-                        <span className="uppercase text-[#7F7F7F]">
+                        <span className="shrink-0 uppercase text-black">
                           {minutes} min
                         </span>
                       </div>
@@ -324,7 +332,7 @@ export function DiscoverFeed({
           <h2 className="font-sans text-sm font-bold text-black">
             Discover what others are reading
           </h2>
-          <div className="no-scrollbar -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1">
+          <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full touch-pan-x gap-2.5 overflow-x-auto overscroll-x-contain px-1 pb-1">
             {others.map((a) => (
               <button
                 key={a.id}
