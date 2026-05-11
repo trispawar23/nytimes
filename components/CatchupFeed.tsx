@@ -319,7 +319,7 @@ export function CatchupFeed({
         >
           <div className="flex w-full cursor-pointer flex-col items-start gap-[10px] text-left">
             <div className="inline-flex w-full items-start gap-[10px]">
-              <p className="min-w-0 flex-1 break-words font-serif text-[20px] font-normal leading-snug text-black">
+              <p className="min-w-0 flex-1 break-words font-serif text-[clamp(15.5px,4.3vw,18px)] font-normal leading-snug text-black">
                 {hero.title}
               </p>
               <CatchupSaveChip />
@@ -378,7 +378,7 @@ export function CatchupFeed({
           </div>
           <div className="flex min-w-0 flex-1 flex-col items-start justify-end gap-[10px]">
             <div className="inline-flex w-full items-start gap-[10px]">
-              <p className="min-w-0 flex-1 break-words font-serif text-[20px] font-normal leading-snug text-black">
+              <p className="min-w-0 flex-1 break-words font-serif text-[clamp(15.5px,4.3vw,18px)] font-normal leading-snug text-black">
                 {hero.title}
               </p>
               <CatchupSaveChip />
@@ -417,7 +417,7 @@ export function CatchupFeed({
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col items-start justify-end gap-[10px]">
                     <div className="inline-flex w-full items-start gap-[10px]">
-                      <p className="min-w-0 flex-1 break-words font-serif text-[20px] font-normal leading-snug text-black">
+                      <p className="min-w-0 flex-1 break-words font-serif text-[clamp(15.5px,4.3vw,18px)] font-normal leading-snug text-black">
                         {a.title}
                       </p>
                       <CatchupSaveChip />
@@ -441,7 +441,7 @@ export function CatchupFeed({
               >
                 <div className="flex w-full cursor-pointer flex-col items-start gap-[10px] text-left">
                   <div className="inline-flex w-full items-start gap-[10px]">
-                    <p className="min-w-0 flex-1 break-words font-serif text-[20px] font-normal leading-snug text-black">
+                    <p className="min-w-0 flex-1 break-words font-serif text-[clamp(15.5px,4.3vw,18px)] font-normal leading-snug text-black">
                       {a.title}
                     </p>
                     <CatchupSaveChip />

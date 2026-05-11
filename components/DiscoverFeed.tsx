@@ -160,7 +160,7 @@ export function DiscoverFeed({
               {/* Header: title row + date (alignSelf stretch in spec) */}
               <div className="flex w-full min-w-0 shrink-0 flex-col items-start justify-end gap-[10px]">
                 <div className="flex w-full min-w-0 items-start gap-[10px]">
-                  <p className="min-w-0 flex-1 break-words text-left font-serif text-[20px] font-normal leading-snug text-black">
+                  <p className="min-w-0 flex-1 break-words text-left font-serif text-[clamp(15.5px,4.3vw,18px)] font-normal leading-snug text-black">
                     {a.title}
                   </p>
                   <SaveChip />
@@ -304,7 +304,7 @@ export function DiscoverFeed({
                       className="flex min-h-[107px] min-w-0 flex-1 flex-col justify-between gap-[10px] text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
                     >
                       <div className="flex w-full min-w-0 items-start gap-[10px]">
-                        <p className="min-w-0 flex-1 break-words text-left font-serif text-[18px] font-normal leading-snug text-black">
+                        <p className="min-w-0 flex-1 break-words text-left font-serif text-[clamp(14px,3.95vw,16.5px)] font-normal leading-snug text-black">
                           {a.title}
                         </p>
                         <SaveChip />
@@ -350,7 +350,7 @@ export function DiscoverFeed({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-2.5">
-                  <p className="max-w-[233px] break-words font-serif text-[20px] font-normal leading-snug text-white">
+                  <p className="max-w-[233px] break-words font-serif text-[clamp(15.5px,4.3vw,18px)] font-normal leading-snug text-white">
                     {a.title}
                   </p>
                 </div>

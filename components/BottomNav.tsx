@@ -60,11 +60,11 @@ export function BottomNav({ active, onTabPress }: Props) {
 
   return (
     <nav
-      className="mt-auto flex min-h-[94.5px] shrink-0 flex-col gap-[10px] border-t border-[#B7B7B7] bg-white px-[35px] pt-[7px] font-poppins"
+      className="mt-auto flex min-h-[80px] shrink-0 flex-col gap-[10px] border-t border-[#B7B7B7] bg-white px-[35px] pt-[7px] font-poppins"
       style={{
         borderTopWidth: "1.027px",
         paddingBottom:
-          "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)",
+          "calc(env(safe-area-inset-bottom, 0px) + 2px)",
       }}
       aria-label="Primary"
     >

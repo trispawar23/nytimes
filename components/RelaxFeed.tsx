@@ -96,7 +96,7 @@ export function RelaxFeed({
             <p className="font-serif text-[15px] font-normal italic leading-snug text-white/95">
               The Interview
             </p>
-            <p className="mt-1 line-clamp-4 font-serif text-[18px] font-normal leading-snug">
+            <p className="mt-1 line-clamp-4 font-serif text-[clamp(14px,3.95vw,16.5px)] font-normal leading-snug">
               {hero.title}
             </p>
           </div>
@@ -124,7 +124,7 @@ export function RelaxFeed({
             imgClassName="h-full w-full object-cover"
           />
           <div className="flex flex-col items-center gap-[10px]">
-            <p className="max-w-[330px] text-center font-serif text-[20px] font-normal leading-snug text-black">
+            <p className="max-w-[330px] text-center font-serif text-[clamp(15.5px,4.3vw,18px)] font-normal leading-snug text-black">
               Did you follow the news this week?
               <br />
               Test your knowledge.
@@ -196,7 +196,7 @@ export function RelaxFeed({
             className="aspect-square w-full max-w-[330px] overflow-hidden bg-[#eee]"
             imgClassName="h-full w-full object-cover"
           />
-          <p className="max-w-[330px] text-center font-serif text-[20px] font-normal leading-snug text-black">
+          <p className="max-w-[330px] text-center font-serif text-[clamp(15.5px,4.3vw,18px)] font-normal leading-snug text-black">
             Word of the Day: {wordLabel}
           </p>
         </div>

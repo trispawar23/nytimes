@@ -158,7 +158,7 @@ export function ForYouHeader({
       <div className="relative z-20 flex min-w-0 flex-col gap-[10.27px] px-[16.44px] pb-[6px] pt-[6px]">
         {/* Sticky row — always visible */}
         <div className="flex w-full items-center gap-[10.27px]">
-          <p className="min-w-0 flex-1 font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[24.66px] font-light leading-[1.25] text-black">
+          <p className="min-w-0 flex-1 font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[clamp(19px,5.25vw,22px)] font-light leading-[1.25] text-black">
             Hi {greetingName},
           </p>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">

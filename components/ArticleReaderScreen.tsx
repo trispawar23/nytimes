@@ -159,7 +159,7 @@ function splitSummaryForReaderLayout(summary: string): {
  * Matches `<article>` body paragraphs.
  */
 const READER_ARTICLE_SERIF_CLASS =
-  "whitespace-pre-wrap font-serif text-[18.49px] font-normal leading-[22.6px] text-[#4D4D4D]";
+  "whitespace-pre-wrap font-serif text-[clamp(14.5px,4vw,16.75px)] font-normal leading-[22.6px] text-[#4D4D4D]";
 
 type Props = {
   article: Article;
@@ -492,7 +492,7 @@ export function ArticleReaderScreen({
                 {kicker}
               </p>
               <div className="relative w-full self-stretch">
-                <h1 className="text-pretty pr-[48px] text-left font-serif text-[24.66px] font-bold italic leading-tight text-black">
+                <h1 className="text-pretty pr-[48px] text-left font-serif text-[clamp(19px,5.25vw,22px)] font-bold italic leading-tight text-black">
                   {article.title}
                 </h1>
                 <button
@@ -511,7 +511,7 @@ export function ArticleReaderScreen({
             </div>
             {!(hl || oneMin) ? (
               <p
-                className="w-full text-left font-serif text-[18.49px] font-normal leading-[22.6px] text-[#4D4D4D]"
+                className="w-full text-left font-serif text-[clamp(14.5px,4vw,16.75px)] font-normal leading-[22.6px] text-[#4D4D4D]"
                 aria-busy={gistLoading && !articleGist ? true : undefined}
               >
                 {dekSubtitle}
@@ -604,7 +604,7 @@ export function ArticleReaderScreen({
                       </p>
                     </>
                   ) : mb.status === "loading" ? (
-                    <p className="inline-flex items-center gap-2 font-serif text-[18.49px] text-[#6b6b6b]">
+                    <p className="inline-flex items-center gap-2 font-serif text-[clamp(14.5px,4vw,16.75px)] text-[#6b6b6b]">
                       <Loader2
                         className="size-4 shrink-0 animate-spin text-neutral-500"
                         aria-hidden
@@ -657,7 +657,7 @@ export function ArticleReaderScreen({
                     ) : null}
                   </>
                 ) : om.status === "loading" ? (
-                  <p className="inline-flex w-full items-center gap-2 font-serif text-[18.49px] text-[#6b6b6b]">
+                  <p className="inline-flex w-full items-center gap-2 font-serif text-[clamp(14.5px,4vw,16.75px)] text-[#6b6b6b]">
                     <Loader2
                       className="size-4 shrink-0 animate-spin text-neutral-500"
                       aria-hidden
@@ -737,7 +737,7 @@ export function ArticleReaderScreen({
                 (mb.status === "error" || mb.status === "insufficient_source")) ||
               (oneMin &&
                 (om.status === "error" || om.status === "insufficient_source")) ? (
-                <p className="font-serif text-[18.49px] font-normal leading-[22.6px] text-[#6b6b6b]">
+                <p className="font-serif text-[clamp(14.5px,4vw,16.75px)] font-normal leading-[22.6px] text-[#6b6b6b]">
                   {oneMin
                     ? "Switch to Medium or Full read to see the original article text."
                     : "Switch to Short or Full read to see the original article text."}
@@ -779,11 +779,11 @@ export function ArticleReaderScreen({
                   </p>
                 ))
               ) : fullFetchState === "loading" ? (
-                <p className="font-serif text-[18.49px] font-normal leading-[22.6px] text-[#a3a3a3]">
+                <p className="font-serif text-[clamp(14.5px,4vw,16.75px)] font-normal leading-[22.6px] text-[#a3a3a3]">
                   …
                 </p>
               ) : (
-                <p className="font-serif text-[18.49px] font-normal leading-[22.6px] text-[#4D4D4D]">
+                <p className="font-serif text-[clamp(14.5px,4vw,16.75px)] font-normal leading-[22.6px] text-[#4D4D4D]">
                   No article body is in the feed for this item yet.
                 </p>
               )}
@@ -837,10 +837,10 @@ export function ArticleReaderScreen({
           </div>
 
           <section className="mx-auto mt-8 w-full max-w-[380px] border-x-0 border-b-0 border-t border-black pt-[10.27px] [border-top-width:1.027px]">
-            <h2 className="border-b border-black/15 pb-3 font-serif text-[20.55px] font-bold text-black [border-bottom-width:1.027px]">
+            <h2 className="border-b border-black/15 pb-3 font-serif text-[clamp(16px,4.4vw,18.5px)] font-bold text-black [border-bottom-width:1.027px]">
               Discover other articles
             </h2>
-            <p className="mt-4 font-serif text-[18.49px] font-normal leading-[22.6px] text-[#4D4D4D]">
+            <p className="mt-4 font-serif text-[clamp(14.5px,4vw,16.75px)] font-normal leading-[22.6px] text-[#4D4D4D]">
               Keep exploring stories from the feed—tap any headline below to open
               it in the reader.
             </p>
@@ -848,7 +848,7 @@ export function ArticleReaderScreen({
 
           {popPick.length > 0 ? (
             <section className="mx-auto mt-6 w-full max-w-[380px] border-x-0 border-b-0 border-t border-black pt-[10.27px] [border-top-width:1.027px]">
-              <h2 className="mb-4 font-sans text-[18.49px] font-bold text-[#121212]">
+              <h2 className="mb-4 font-sans text-[clamp(14.5px,4vw,16.75px)] font-bold text-[#121212]">
                 Pop Culture
               </h2>
               <ul className="flex flex-col gap-4">
@@ -866,7 +866,7 @@ export function ArticleReaderScreen({
                         imgClassName="h-full w-full object-cover"
                       />
                       <span
-                        className={`min-w-0 flex-1 font-serif text-[20.55px] font-normal leading-snug text-black ${
+                        className={`min-w-0 flex-1 font-serif text-[clamp(16px,4.4vw,18.5px)] font-normal leading-snug text-black ${
                           idx < 2 ? "underline" : ""
                         }`}
                       >
@@ -881,7 +881,7 @@ export function ArticleReaderScreen({
 
           {trendPick.length > 0 ? (
             <section className="mx-auto mt-6 w-full max-w-[380px] border-x-0 border-b-0 border-t border-black pb-4 pt-[10.27px] [border-top-width:1.027px]">
-              <h2 className="mb-4 font-sans text-[18.49px] font-bold text-[#121212]">
+              <h2 className="mb-4 font-sans text-[clamp(14.5px,4vw,16.75px)] font-bold text-[#121212]">
                 Trending in The Times
               </h2>
               <ul className="flex flex-col gap-4">
@@ -899,7 +899,7 @@ export function ArticleReaderScreen({
                         imgClassName="h-full w-full object-cover"
                       />
                       <span
-                        className={`min-w-0 flex-1 font-serif text-[20.55px] font-normal leading-snug text-black ${
+                        className={`min-w-0 flex-1 font-serif text-[clamp(16px,4.4vw,18.5px)] font-normal leading-snug text-black ${
                           idx === 0 ? "underline" : ""
                         }`}
                       >

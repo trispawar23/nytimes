@@ -84,7 +84,7 @@ export function CatchMeUpPanel({
         >
           <div className="flex items-start justify-between gap-2 border-b border-rule px-4 py-3">
             <div>
-              <p className="font-serif text-[18px] leading-snug text-ink">
+              <p className="font-serif text-[clamp(14px,3.95vw,16.5px)] leading-snug text-ink">
                 Catch me up
               </p>
               <p className="mt-1 font-sans text-[11px] text-ink-muted">

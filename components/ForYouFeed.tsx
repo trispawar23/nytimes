@@ -171,7 +171,7 @@ export function ForYouFeed({
                     />
                   </div>
                   <div className="flex w-full min-w-0 flex-col">
-                    <p className="min-w-0 break-words font-['Georgia',serif] text-[20.55px] font-normal leading-snug text-black">
+                    <p className="min-w-0 break-words font-['Georgia',serif] text-[clamp(16px,4.4vw,18.5px)] font-normal leading-snug text-black">
                       {hero.title}
                     </p>
                     <p className="mt-[2px] font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[8.22px] font-normal leading-normal text-[#7F7F7F]">
@@ -191,7 +191,7 @@ export function ForYouFeed({
                     aria-current={selectedId === a.id ? "true" : undefined}
                     className="flex w-[205px] shrink-0 snap-start cursor-grab flex-col items-start text-left focus:outline-none active:cursor-grabbing"
                   >
-                    <span className="min-w-0 break-words font-['Georgia',serif] text-[16.44px] font-normal leading-snug text-black">
+                    <span className="min-w-0 break-words font-['Georgia',serif] text-[clamp(13.5px,3.7vw,15px)] font-normal leading-snug text-black">
                       {a.title}
                     </span>
                     <span className="mt-[2px] font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[8.22px] font-normal leading-normal text-[#7F7F7F]">
