@@ -47,8 +47,13 @@ function useCatchupBrief(article: Article | null, enabled: boolean) {
       return;
     }
 
+    /**
+     * Always ask the server — it can fetch the full article via /api/article-read
+     * when the snippet alone is too short. Only skip when there's truly nothing.
+     */
     const body = articleDisplayBody(article);
-    if (body.length < 120) {
+    const url = article.url?.trim() ?? "";
+    if (body.length < 24 && !/^https?:\/\//i.test(url)) {
       setBrief(null);
       setBriefError(null);
       setBriefLoading(false);
@@ -67,6 +72,7 @@ function useCatchupBrief(article: Article | null, enabled: boolean) {
           body: JSON.stringify({
             title: article.title,
             body: body.slice(0, 14_000),
+            url,
           }),
           signal: ac.signal,
         });
@@ -160,16 +166,22 @@ function KeyHighlightsBlock({
       <p className="w-full font-sans text-[14px] font-medium leading-snug text-black">
         Key Highlights
       </p>
-      <div className="flex w-full flex-col gap-4">
+      <ul className="flex w-full list-none flex-col gap-2 pl-0">
         {brief.key_points.map((point, i) => (
-          <p
+          <li
             key={i}
-            className="w-full whitespace-pre-line font-serif text-[12px] font-normal leading-relaxed text-[#5F5E5E]"
+            className="flex w-full items-start gap-[8px] font-serif text-[12px] font-normal leading-relaxed text-[#5F5E5E]"
           >
-            {point.trim()}
-          </p>
+            <span
+              aria-hidden
+              className="mt-[7px] inline-block size-[5px] shrink-0 rounded-full bg-[#5F5E5E]"
+            />
+            <span className="min-w-0 flex-1 whitespace-pre-line">
+              {point.trim()}
+            </span>
+          </li>
         ))}
-      </div>
+      </ul>
       {brief.limitations.trim() ? (
         <p className="mt-1 font-sans text-[10px] leading-snug text-[#9a9a9a]">
           {brief.limitations.trim()}

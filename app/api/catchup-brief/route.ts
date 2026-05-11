@@ -4,9 +4,14 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import type { CatchupBriefApiResult, CatchupBriefResponse } from "@/lib/types";
 import { cleanArticleContentWithFallback } from "@/lib/clean-article-content";
+import { fetchArticlePlainText } from "@/lib/article-read-fetch";
+import { isAllowedArticleReadUrl } from "@/lib/article-read-url";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
+
+/** Minimum cleaned-body length before we ask the model to summarize. */
+const MIN_BODY_CHARS = 120;
 
 const RULES_PATH = path.join(
   process.cwd(),
@@ -64,9 +69,13 @@ function coerceCatchupBrief(obj: unknown): CatchupBriefResponse | null {
 export async function POST(
   req: Request,
 ): Promise<NextResponse<CatchupBriefApiResult>> {
-  let payload: { title?: string; body?: string };
+  let payload: { title?: string; body?: string; url?: string };
   try {
-    payload = (await req.json()) as { title?: string; body?: string };
+    payload = (await req.json()) as {
+      title?: string;
+      body?: string;
+      url?: string;
+    };
   } catch {
     return NextResponse.json(
       { ok: false, error: "Invalid JSON body.", code: "VALIDATION" },
@@ -78,16 +87,37 @@ export async function POST(
     typeof payload.title === "string" ? payload.title.trim() : "";
   const rawBody =
     typeof payload.body === "string" ? payload.body.trim() : "";
-  const articleBody = cleanArticleContentWithFallback(rawBody);
+  const url = typeof payload.url === "string" ? payload.url.trim() : "";
+  let articleBody = cleanArticleContentWithFallback(rawBody);
 
-  if (!title || !rawBody) {
+  if (!title) {
     return NextResponse.json(
-      { ok: false, error: "Title and body are required.", code: "VALIDATION" },
+      { ok: false, error: "Title is required.", code: "VALIDATION" },
       { status: 400 },
     );
   }
 
-  if (articleBody.length < 120) {
+  /**
+   * Wire feeds (NewsAPI/SerpAPI) often return a 200-char teaser, which falls below
+   * MIN_BODY_CHARS once cleaned. Fall back to the same plain-text fetch the reader
+   * uses so Catchup briefs are based on the full article, not the snippet.
+   */
+  if (
+    articleBody.length < MIN_BODY_CHARS &&
+    url &&
+    isAllowedArticleReadUrl(url) &&
+    process.env.ARTICLE_READ_FETCH !== "0"
+  ) {
+    const fetched = await fetchArticlePlainText(url);
+    if (fetched.ok && fetched.text) {
+      const cleaned = cleanArticleContentWithFallback(fetched.text);
+      if (cleaned.length > articleBody.length) {
+        articleBody = cleaned;
+      }
+    }
+  }
+
+  if (articleBody.length < MIN_BODY_CHARS) {
     return NextResponse.json(
       {
         ok: false,
