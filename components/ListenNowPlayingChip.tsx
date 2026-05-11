@@ -101,9 +101,10 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
 
   const activeVisible =
     !!snap.meta &&
+    !!snap.key &&
     (snap.phase === "loading" ||
       snap.phase === "playing" ||
-      snap.paused);
+      snap.phase === "paused");
 
   const onDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
     if (!dragEventCarriesArticle(e)) return;
@@ -383,7 +384,8 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
           <div className="inline-flex items-center justify-center gap-[25px] rounded-[28px] bg-black py-2.5 pl-5 pr-5 shadow-[0_6px_24px_rgba(0,0,0,0.28)]">
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 const id = snap.meta!.articleId;
                 const a = articles.find((x) => x.id === id);
                 if (a) onOpenArticle(a);
@@ -404,7 +406,8 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 if (snap.phase === "loading") return;
                 togglePuterPlaybackPause();
               }}
@@ -415,7 +418,9 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
                   ? "Loading audio"
                   : snap.phase === "playing"
                     ? "Pause"
-                    : "Resume"
+                    : snap.phase === "paused"
+                      ? "Resume"
+                      : "Play"
               }
             >
               {snap.phase === "loading" ? (

@@ -9,6 +9,7 @@ import {
   readerDisplayBriefCacheKey,
 } from "@/lib/summary-cache-key";
 import { modeToTags } from "@/lib/news-query";
+import { replacePlaybackKeyIfMatch } from "@/lib/puter-tts";
 import { orderArticlesForLongReadSections } from "@/lib/reading-stats";
 import { BottomNav } from "./BottomNav";
 import type { PanelStatus } from "./CatchMeUpPanel";
@@ -55,6 +56,7 @@ export default function ForYouClient() {
   const [discoverLayoutActive, setDiscoverLayoutActive] = useState(false);
   const [selected, setSelected] = useState<Article | null>(null);
   const [readerArticle, setReaderArticle] = useState<Article | null>(null);
+  const prevReaderArticleRef = useRef<Article | null>(null);
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [readingTime, setReadingTime] = useState(3);
@@ -214,6 +216,16 @@ export default function ForYouClient() {
     setReaderMediumBrief({ status: "idle", data: null, error: undefined });
     setReaderShortBrief({ status: "idle", data: null, error: undefined });
   }, [readerArticle?.id]);
+
+  /** Dock listen key: reader → feed only when leaving the article view (not Strict Mode child remounts). */
+  useEffect(() => {
+    const prev = prevReaderArticleRef.current;
+    prevReaderArticleRef.current = readerArticle;
+
+    if (prev && readerArticle === null) {
+      replacePlaybackKeyIfMatch(`reader:${prev.id}`, `feed:${prev.id}`);
+    }
+  }, [readerArticle]);
 
   /**
    * When panel is open, sync from **default** brief cache for article × mode × current

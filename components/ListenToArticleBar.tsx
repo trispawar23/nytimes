@@ -1,10 +1,18 @@
 "use client";
 
 import { Loader2, Pause, Play } from "lucide-react";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   PUTER_TTS_MAX_CHARS,
   getPuterPlaybackSnapshot,
+  replacePlaybackKeyIfMatch,
   runPuterListen,
   stopPuterPlayback,
   subscribePuterPlayback,
@@ -42,11 +50,26 @@ export function ListenToArticleBar({
   const mine = snap.key === key;
   const phase = mine ? snap.phase : "idle";
 
+  const prevPlaybackKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    stopPuterPlayback();
     setErrorDetail(null);
     setTruncationNote(null);
   }, [speechText, playbackKey]);
+
+  /** Before paint: hand feed dock session to reader so the chip stays filled when opening a playing story. */
+  useLayoutEffect(() => {
+    replacePlaybackKeyIfMatch(`feed:${playbackKey}`, `reader:${playbackKey}`);
+  }, [playbackKey]);
+
+  /** Stop only when switching to a different article inside the reader (not on mount / Strict Mode remounts). */
+  useEffect(() => {
+    const prev = prevPlaybackKeyRef.current;
+    if (prev !== null && prev !== playbackKey) {
+      stopPuterPlayback();
+    }
+    prevPlaybackKeyRef.current = playbackKey;
+  }, [playbackKey]);
 
   const onPress = useCallback(async () => {
     const raw = speechText.trim();
@@ -81,7 +104,8 @@ export function ListenToArticleBar({
     }
   }, [key, speechText, playbackKey, thumbnailUrl]);
 
-  const showPlayIcon = phase === "idle" || phase === "error";
+  const showPlayIcon =
+    phase === "idle" || phase === "paused" || phase === "error";
 
   return (
     <button
@@ -94,7 +118,9 @@ export function ListenToArticleBar({
           ? "Pause article audio"
           : phase === "loading"
             ? "Generating audio"
-            : "Listen to this article"
+            : phase === "paused"
+              ? "Resume article audio"
+              : "Listen to this article"
       }
       className="flex w-full max-w-[380.12px] flex-row items-center gap-[5.14px] rounded-md text-left transition-opacity hover:opacity-90 disabled:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
     >

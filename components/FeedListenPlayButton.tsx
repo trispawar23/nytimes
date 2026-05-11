@@ -69,11 +69,13 @@ export function FeedListenPlayButton({
           ? "Pause audio"
           : phase === "loading"
             ? "Loading audio"
-            : "Listen to article without opening"
+            : phase === "paused"
+              ? "Resume audio"
+              : "Listen to article without opening"
       }
       className={`${shell} focus:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-70 ${className}`}
     >
-      {phase === "idle" || phase === "error" ? (
+      {phase === "idle" || phase === "paused" || phase === "error" ? (
         <Play
           className={
             tone === "dark" || tone === "afy"

@@ -7,7 +7,12 @@
 export const PUTER_TTS_MAX_CHARS = 6000;
 export const PUTER_SAFE_SLICE = 5900;
 
-export type PuterPlaybackPhase = "idle" | "loading" | "playing" | "error";
+export type PuterPlaybackPhase =
+  | "idle"
+  | "loading"
+  | "playing"
+  | "paused"
+  | "error";
 
 export function buildArticleSpeechText(title: string, body: string): string {
   const t = title.trim();
@@ -49,8 +54,7 @@ function getSynth(): SpeechSynthesis | null {
 }
 
 function computePaused(): boolean {
-  const syn = getSynth();
-  return !!activeKey && !!syn && syn.paused && syn.speaking;
+  return activePhase === "paused";
 }
 
 function notify() {
@@ -70,6 +74,13 @@ export function subscribePuterPlayback(onStoreChange: Listener): () => void {
 
 export function getPuterPlaybackSnapshot(): PuterPlaybackSnapshot {
   return snapshot;
+}
+
+/** Same listen session, new key (e.g. feed dock → reader UI). */
+export function replacePlaybackKeyIfMatch(fromKey: string, toKey: string): void {
+  if (activeKey !== fromKey) return;
+  activeKey = toKey;
+  notify();
 }
 
 function finishPlayback() {
@@ -98,12 +109,12 @@ export function togglePuterPlaybackPause(): void {
 
   if (syn.speaking && !syn.paused) {
     syn.pause();
-    activePhase = "idle";
+    activePhase = "paused";
     notify();
     return;
   }
 
-  if (syn.paused) {
+  if (syn.paused || activePhase === "paused") {
     syn.resume();
     activePhase = "playing";
     notify();
@@ -166,12 +177,12 @@ export async function runPuterListen(options: {
     !syn.paused
   ) {
     syn.pause();
-    activePhase = "idle";
+    activePhase = "paused";
     notify();
     return { didStartNewPlayback: false };
   }
 
-  if (activeKey === key && syn.paused && syn.speaking) {
+  if (activeKey === key && activePhase === "paused") {
     syn.resume();
     activePhase = "playing";
     notify();
