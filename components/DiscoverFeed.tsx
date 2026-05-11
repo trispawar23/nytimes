@@ -139,7 +139,7 @@ export function DiscoverFeed({
         <h2 className="font-sans text-[14px] font-bold leading-normal text-black">
           Articles For You
         </h2>
-        <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full items-stretch gap-[10px] overflow-x-auto overscroll-x-contain px-1 pb-1">
+        <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full touch-manipulation items-stretch gap-[10px] overflow-x-auto overscroll-x-contain px-1 pb-1">
           {afy.map((a) => (
             <div
               key={a.id}
@@ -200,7 +200,7 @@ export function DiscoverFeed({
           <h2 className="font-sans text-sm font-bold leading-normal text-black">
             Trending topics
           </h2>
-          <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain px-1 pb-1 pr-3 [-webkit-overflow-scrolling:touch]">
+          <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full snap-x snap-mandatory touch-manipulation gap-2.5 overflow-x-auto overscroll-x-contain px-1 pb-1 pr-3 [-webkit-overflow-scrolling:touch]">
             {trending.map((a) => (
               <button
                 key={a.id}
@@ -258,7 +258,7 @@ export function DiscoverFeed({
           <h2 className="font-sans text-[14px] font-bold leading-normal text-black">
             Find opinions
           </h2>
-          <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full items-stretch gap-4 overflow-x-auto overscroll-x-contain px-1 pb-1">
+          <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full touch-manipulation items-stretch gap-4 overflow-x-auto overscroll-x-contain px-1 pb-1">
             {opinions.map((a) => {
               const minutes = Math.max(
                 1,
@@ -332,7 +332,7 @@ export function DiscoverFeed({
           <h2 className="font-sans text-sm font-bold text-black">
             Discover what others are reading
           </h2>
-          <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full gap-2.5 overflow-x-auto overscroll-x-contain px-1 pb-1">
+          <div className="no-scrollbar -mx-1 flex min-w-0 w-full max-w-full touch-manipulation gap-2.5 overflow-x-auto overscroll-x-contain px-1 pb-1">
             {others.map((a) => (
               <button
                 key={a.id}

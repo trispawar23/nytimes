@@ -11,8 +11,9 @@ import {
 import { modeToTags } from "@/lib/news-query";
 import { replacePlaybackKeyIfMatch } from "@/lib/puter-tts";
 import {
-  articleBodyReadingMinutesForLayout,
+  articleWordCount,
   orderArticlesForLongReadSections,
+  readingMinutesFromWordCount,
 } from "@/lib/reading-stats";
 import { BottomNav } from "./BottomNav";
 import type { PanelStatus } from "./CatchMeUpPanel";
@@ -566,6 +567,14 @@ export default function ForYouClient() {
 
   const briefingArticle = readerArticle ?? selected;
 
+  /**
+   * Catch Me Up panel rail's Full stop snaps to the briefing article's
+   * actual full read time (instead of the hardcoded 8 min default).
+   */
+  const briefingArticleFullMinutes = briefingArticle
+    ? readingMinutesFromWordCount(articleWordCount(briefingArticle))
+    : undefined;
+
   return (
     <PhoneFrame>
       <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -721,12 +730,8 @@ export default function ForYouClient() {
           errorMessage={summaryError}
           data={summary}
           readingTimeMinutes={readingTime}
-          articleFullMinutes={
-            briefingArticle
-              ? articleBodyReadingMinutesForLayout(briefingArticle)
-              : undefined
-          }
           onReadingTimeChange={setReadingTime}
+          articleFullMinutes={briefingArticleFullMinutes}
           question={question}
           onQuestionChange={setQuestion}
           onAsk={() => {

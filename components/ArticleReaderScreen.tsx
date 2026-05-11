@@ -26,7 +26,6 @@ import {
   trimRedundantOpenTitle,
 } from "@/lib/reading-stats";
 import type { Article, SummaryResponse } from "@/lib/types";
-import { useReaderBackGesture } from "@/lib/use-reader-back-gesture";
 import type { PanelStatus } from "./CatchMeUpPanel";
 import { ArticleReadTimeRail } from "./ArticleReadTimeRail";
 import {
@@ -205,13 +204,6 @@ export function ArticleReaderScreen({
   const statusTime = useStatusClock();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  /**
-   * Wires Android's system back button and iOS' edge-swipe gesture to close
-   * the reader. On mobile PWA standalone we also hide the in-app `< Back`
-   * affordance since the platform gesture replaces it.
-   */
-  const { hideBackButton } = useReaderBackGesture(onClose);
-
   const [readStop, setReadStop] = useState<number>(readingTimeMinutes);
 
   const mergedLocalBody = useMemo(() => articleDisplayBody(article), [article]);
@@ -380,49 +372,25 @@ export function ArticleReaderScreen({
   );
 
   /**
-   * The Full stop tracks the actual article body length. As the full-text
-   * fetch resolves, wordCount grows and the rail label updates with it.
-   * Falls back to `readMinutesFromFetch` from the feed when the local
-   * body is still the snippet.
+   * Rail's Full stop = the actual article's estimated read time (clamped
+   * to ≥ 4 min so it stays above the Medium stop, and ≤ summarize cap).
    */
-  const articleFullMinutes = useMemo(() => {
-    const fromBody = readingMinutesFromWordCount(wordCount);
-    if (fromBody > 0) return fromBody;
-    const fromFeed = article.readMinutesFromFetch;
-    if (typeof fromFeed === "number" && fromFeed > 0) return fromFeed;
-    return undefined;
-  }, [article.readMinutesFromFetch, wordCount]);
-
+  const fullArticleMinutes = useMemo(
+    () => readingMinutesFromWordCount(wordCount),
+    [wordCount],
+  );
   const railStops = useMemo(
-    () => articleReadRailStops(articleFullMinutes),
-    [articleFullMinutes],
+    () => articleReadRailStops(fullArticleMinutes),
+    [fullArticleMinutes],
   );
 
   const fullReadStop = railStops[2];
-  /**
-   * Tracks whether the user explicitly picked Short / Medium for the
-   * current article. While `false`, the readStop follows `fullReadStop` so
-   * the rail label and selected minute value update together when the
-   * full-text fetch resolves and `articleFullMinutes` grows.
-   */
-  const userPickedNonFullRef = useRef(false);
 
-  /** Reset on article change: default to Full and clear the manual-pick flag. */
+  /** Open article on the rightmost rail stop (full estimated read), and refresh when body length changes. */
   useLayoutEffect(() => {
-    userPickedNonFullRef.current = false;
     setReadStop(fullReadStop);
     onReadingTimeChange(fullReadStop);
-    // fullReadStop intentionally omitted; the follow-Full effect below
-    // handles its mid-article updates without overriding user picks.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [article.id]);
-
-  /** Keep the readStop in sync with a growing fullReadStop while user stays on Full. */
-  useEffect(() => {
-    if (userPickedNonFullRef.current) return;
-    setReadStop(fullReadStop);
-    onReadingTimeChange(fullReadStop);
-  }, [fullReadStop, onReadingTimeChange]);
+  }, [article.id, fullReadStop, onReadingTimeChange]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -504,23 +472,17 @@ export function ArticleReaderScreen({
               />
             </div>
           </div>
-          {hideBackButton ? (
-            // Mobile PWA: rely on the platform back gesture (iOS edge swipe /
-            // Android system back) so the header preserves vertical rhythm.
-            <div className="px-[16.44px] pb-2 pt-0" aria-hidden />
-          ) : (
-            <div className="flex px-[16.44px] pb-2 pt-0">
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Back to feed"
-                className="flex items-center gap-1 rounded-md font-sans text-[12px] font-medium text-black hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-              >
-                <ChevronLeft className="size-5" strokeWidth={2} aria-hidden />
-                Back
-              </button>
-            </div>
-          )}
+          <div className="flex px-[16.44px] pb-2 pt-0">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Back to feed"
+              className="flex items-center gap-1 rounded-md font-sans text-[12px] font-medium text-black hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+            >
+              <ChevronLeft className="size-5" strokeWidth={2} aria-hidden />
+              Back
+            </button>
+          </div>
         </header>
 
         <div className="px-[16.44px] pb-6">
@@ -565,7 +527,6 @@ export function ArticleReaderScreen({
               stops={railStops}
               value={readStop}
               onChange={(m) => {
-                userPickedNonFullRef.current = m !== fullReadStop;
                 setReadStop(m);
                 onReadingTimeChange(m);
                 if (m === 1) {
