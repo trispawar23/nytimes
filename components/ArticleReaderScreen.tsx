@@ -25,6 +25,7 @@ import {
   trimRedundantOpenTitle,
 } from "@/lib/reading-stats";
 import type { Article, SummaryResponse } from "@/lib/types";
+import { useReaderBackGesture } from "@/lib/use-reader-back-gesture";
 import type { PanelStatus } from "./CatchMeUpPanel";
 import { ArticleReadTimeRail } from "./ArticleReadTimeRail";
 import {
@@ -202,6 +203,13 @@ export function ArticleReaderScreen({
 }: Props) {
   const statusTime = useStatusClock();
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Wires Android's system back button and iOS' edge-swipe gesture to close
+   * the reader. On mobile PWA standalone we also hide the in-app `< Back`
+   * affordance since the platform gesture replaces it.
+   */
+  const { hideBackButton } = useReaderBackGesture(onClose);
 
   const [readStop, setReadStop] = useState<number>(readingTimeMinutes);
 
@@ -460,17 +468,23 @@ export function ArticleReaderScreen({
               />
             </div>
           </div>
-          <div className="flex px-[16.44px] pb-2 pt-0">
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Back to feed"
-              className="flex items-center gap-1 rounded-md font-sans text-[12px] font-medium text-black hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-            >
-              <ChevronLeft className="size-5" strokeWidth={2} aria-hidden />
-              Back
-            </button>
-          </div>
+          {hideBackButton ? (
+            // Mobile PWA: rely on the platform back gesture (iOS edge swipe /
+            // Android system back) so the header preserves vertical rhythm.
+            <div className="px-[16.44px] pb-2 pt-0" aria-hidden />
+          ) : (
+            <div className="flex px-[16.44px] pb-2 pt-0">
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Back to feed"
+                className="flex items-center gap-1 rounded-md font-sans text-[12px] font-medium text-black hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+              >
+                <ChevronLeft className="size-5" strokeWidth={2} aria-hidden />
+                Back
+              </button>
+            </div>
+          )}
         </header>
 
         <div className="px-[16.44px] pb-6">
