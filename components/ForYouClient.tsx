@@ -10,7 +10,10 @@ import {
 } from "@/lib/summary-cache-key";
 import { modeToTags } from "@/lib/news-query";
 import { replacePlaybackKeyIfMatch } from "@/lib/puter-tts";
-import { orderArticlesForLongReadSections } from "@/lib/reading-stats";
+import {
+  articleBodyReadingMinutesForLayout,
+  orderArticlesForLongReadSections,
+} from "@/lib/reading-stats";
 import { BottomNav } from "./BottomNav";
 import type { PanelStatus } from "./CatchMeUpPanel";
 import { CatchMeUpPanel } from "./CatchMeUpPanel";
@@ -718,6 +721,11 @@ export default function ForYouClient() {
           errorMessage={summaryError}
           data={summary}
           readingTimeMinutes={readingTime}
+          articleFullMinutes={
+            briefingArticle
+              ? articleBodyReadingMinutesForLayout(briefingArticle)
+              : undefined
+          }
           onReadingTimeChange={setReadingTime}
           question={question}
           onQuestionChange={setQuestion}

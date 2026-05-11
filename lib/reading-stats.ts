@@ -21,14 +21,33 @@ export function readingMinutesFromWordCount(
 /** Matches `/api/summarize` clamp (max 12 min briefing targets). */
 export const READ_RAIL_MAX_MINUTES = 12;
 
-/** Fixed reader rail: Short → Medium → Full (summarize API allows up to 12 min). */
+/** Default rail when the caller doesn't know the article's true length. */
 export const ARTICLE_READ_RAIL_MINUTES = [1, 3, 8] as const;
 
 /**
- * Three stops for the read-time rail (matches UI: Short 1 min, Medium 3 min, Full 8 min).
+ * Three stops for the read-time rail.
+ *
+ * Short (1 min) and Medium (3 min) are anchored because the reader uses
+ * those exact values as layout switches for the one-minute / half-length
+ * summary modes. The Full stop adapts to the open article's actual reading
+ * time, clamped to [4, READ_RAIL_MAX_MINUTES] so the three stops stay
+ * strictly increasing.
  */
-export function articleReadRailStops(): readonly [number, number, number] {
-  return ARTICLE_READ_RAIL_MINUTES;
+export function articleReadRailStops(
+  fullMinutes?: number,
+): readonly [number, number, number] {
+  if (
+    typeof fullMinutes !== "number" ||
+    !Number.isFinite(fullMinutes) ||
+    fullMinutes <= 0
+  ) {
+    return ARTICLE_READ_RAIL_MINUTES;
+  }
+  const full = Math.min(
+    READ_RAIL_MAX_MINUTES,
+    Math.max(4, Math.round(fullMinutes)),
+  );
+  return [1, 3, full];
 }
 
 export function nearestArticleReadRailStop(

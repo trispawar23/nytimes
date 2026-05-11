@@ -27,6 +27,12 @@ type Props = {
   errorMessage?: string;
   data?: SummaryResponse | null;
   readingTimeMinutes: number;
+  /**
+   * Body reading time of the currently selected article. When provided,
+   * the rail's Full stop reflects the article's actual length (clamped
+   * to ≥ 4 min so Short/Medium/Full stay distinct).
+   */
+  articleFullMinutes?: number;
   onReadingTimeChange: (n: number) => void;
   question: string;
   onQuestionChange: (q: string) => void;
@@ -44,6 +50,7 @@ export function CatchMeUpPanel({
   errorMessage,
   data,
   readingTimeMinutes,
+  articleFullMinutes,
   onReadingTimeChange,
   question,
   onQuestionChange,
@@ -53,7 +60,10 @@ export function CatchMeUpPanel({
   onCatchMeUp,
 }: Props) {
   const busy = status === "loading";
-  const readRailStops = useMemo(() => articleReadRailStops(), []);
+  const readRailStops = useMemo(
+    () => articleReadRailStops(articleFullMinutes),
+    [articleFullMinutes],
+  );
   const railValue = nearestArticleReadRailStop(readingTimeMinutes, [
     ...readRailStops,
   ]);

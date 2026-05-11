@@ -21,6 +21,7 @@ import {
   articleReadRailStops,
   bodyParagraphs,
   readerBodyWordCount,
+  readingMinutesFromWordCount,
   shouldTryFetchFullArticleText,
   trimRedundantOpenTitle,
 } from "@/lib/reading-stats";
@@ -378,15 +379,50 @@ export function ArticleReaderScreen({
     [article.title, displayBody],
   );
 
-  const railStops = articleReadRailStops();
+  /**
+   * The Full stop tracks the actual article body length. As the full-text
+   * fetch resolves, wordCount grows and the rail label updates with it.
+   * Falls back to `readMinutesFromFetch` from the feed when the local
+   * body is still the snippet.
+   */
+  const articleFullMinutes = useMemo(() => {
+    const fromBody = readingMinutesFromWordCount(wordCount);
+    if (fromBody > 0) return fromBody;
+    const fromFeed = article.readMinutesFromFetch;
+    if (typeof fromFeed === "number" && fromFeed > 0) return fromFeed;
+    return undefined;
+  }, [article.readMinutesFromFetch, wordCount]);
+
+  const railStops = useMemo(
+    () => articleReadRailStops(articleFullMinutes),
+    [articleFullMinutes],
+  );
 
   const fullReadStop = railStops[2];
+  /**
+   * Tracks whether the user explicitly picked Short / Medium for the
+   * current article. While `false`, the readStop follows `fullReadStop` so
+   * the rail label and selected minute value update together when the
+   * full-text fetch resolves and `articleFullMinutes` grows.
+   */
+  const userPickedNonFullRef = useRef(false);
 
-  /** Open article on the rightmost rail stop (full estimated read), and refresh when body length changes. */
+  /** Reset on article change: default to Full and clear the manual-pick flag. */
   useLayoutEffect(() => {
+    userPickedNonFullRef.current = false;
     setReadStop(fullReadStop);
     onReadingTimeChange(fullReadStop);
-  }, [article.id, fullReadStop, onReadingTimeChange]);
+    // fullReadStop intentionally omitted; the follow-Full effect below
+    // handles its mid-article updates without overriding user picks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article.id]);
+
+  /** Keep the readStop in sync with a growing fullReadStop while user stays on Full. */
+  useEffect(() => {
+    if (userPickedNonFullRef.current) return;
+    setReadStop(fullReadStop);
+    onReadingTimeChange(fullReadStop);
+  }, [fullReadStop, onReadingTimeChange]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -529,6 +565,7 @@ export function ArticleReaderScreen({
               stops={railStops}
               value={readStop}
               onChange={(m) => {
+                userPickedNonFullRef.current = m !== fullReadStop;
                 setReadStop(m);
                 onReadingTimeChange(m);
                 if (m === 1) {
