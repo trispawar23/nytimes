@@ -216,7 +216,8 @@ export function CatchupFeed({
   const shell = "w-full min-w-0 px-4";
 
   const hero = articles[0];
-  const secondary = articles.slice(1, 3);
+  /** Show every article the feed returned beyond the hero; one expanded at a time keeps brief fetches bounded. */
+  const secondary = articles.slice(1);
 
   const heroBrief = useCatchupBrief(hero, !!hero && !loading);
 
