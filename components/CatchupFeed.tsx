@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { articleDragProps } from "@/lib/article-dnd";
 import {
   articleBodyReadingMinutesForLayout,
@@ -14,6 +14,16 @@ import type {
 } from "@/lib/types";
 import { FeedListenPlayButton } from "./FeedListenPlayButton";
 import { SafeArticleImage } from "./SafeArticleImage";
+
+/**
+ * Per-tab brief cache keyed by article id. Survives expanded/collapsed toggles
+ * and the read-meta minute updates that swap the article object identity
+ * (which used to retrigger this hook on every refresh).
+ */
+const briefCache = new Map<
+  string,
+  { brief: CatchupBriefResponse | null; error: string | null }
+>();
 
 const CARD_SHADOW =
   "shadow-[1px_1px_7.3px_rgba(121,121,121,0.25)]" as const;
@@ -35,24 +45,49 @@ function heroSnippet(a: Article): string {
 }
 
 function useCatchupBrief(article: Article | null, enabled: boolean) {
-  const [brief, setBrief] = useState<CatchupBriefResponse | null>(null);
+  const articleId = article?.id ?? null;
+  /**
+   * Always reach into the *latest* article body via a ref so a read-meta tick
+   * (which produces a new object with the same id) does not retrigger the
+   * fetch effect.
+   */
+  const articleRef = useRef<Article | null>(article);
+  articleRef.current = article;
+
+  const cached = articleId ? briefCache.get(articleId) : null;
+  const [brief, setBrief] = useState<CatchupBriefResponse | null>(
+    cached?.brief ?? null,
+  );
   const [briefLoading, setBriefLoading] = useState(false);
-  const [briefError, setBriefError] = useState<string | null>(null);
+  const [briefError, setBriefError] = useState<string | null>(
+    cached?.error ?? null,
+  );
 
   useEffect(() => {
-    if (!article || !enabled) {
+    if (!enabled || !articleId) {
       setBrief(null);
       setBriefError(null);
       setBriefLoading(false);
       return;
     }
 
+    const hit = briefCache.get(articleId);
+    if (hit) {
+      setBrief(hit.brief);
+      setBriefError(hit.error);
+      setBriefLoading(false);
+      return;
+    }
+
+    const a = articleRef.current;
+    if (!a) return;
+
     /**
      * Always ask the server — it can fetch the full article via /api/article-read
      * when the snippet alone is too short. Only skip when there's truly nothing.
      */
-    const body = articleDisplayBody(article);
-    const url = article.url?.trim() ?? "";
+    const body = articleDisplayBody(a);
+    const url = a.url?.trim() ?? "";
     if (body.length < 24 && !/^https?:\/\//i.test(url)) {
       setBrief(null);
       setBriefError(null);
@@ -70,7 +105,7 @@ function useCatchupBrief(article: Article | null, enabled: boolean) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            title: article.title,
+            title: a.title,
             body: body.slice(0, 14_000),
             url,
           }),
@@ -79,10 +114,15 @@ function useCatchupBrief(article: Article | null, enabled: boolean) {
         const json = (await res.json()) as CatchupBriefApiResult;
         if (ac.signal.aborted) return;
         if (!json.ok) {
+          briefCache.set(articleId, {
+            brief: null,
+            error: json.error ?? "Could not load highlights.",
+          });
           setBrief(null);
           setBriefError(json.error ?? "Could not load highlights.");
           return;
         }
+        briefCache.set(articleId, { brief: json.data, error: null });
         setBrief(json.data);
       } catch {
         if (ac.signal.aborted) return;
@@ -94,7 +134,7 @@ function useCatchupBrief(article: Article | null, enabled: boolean) {
     })();
 
     return () => ac.abort();
-  }, [article, enabled]);
+  }, [articleId, enabled]);
 
   return { brief, briefLoading, briefError };
 }

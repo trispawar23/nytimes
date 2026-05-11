@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Article, FeedMode, NewsFeedResult, SummarizeApiResult } from "@/lib/types";
 import type { SummaryResponse } from "@/lib/types";
 import {
@@ -22,6 +22,7 @@ import { ForYouFeed } from "./ForYouFeed";
 import { ForYouHeader } from "./ForYouHeader";
 import { ListenNowPlayingChip } from "./ListenNowPlayingChip";
 import { PhoneFrame } from "./PhoneFrame";
+import { PullToRefresh } from "./PullToRefresh";
 
 type BriefCacheEntry = {
   data: SummaryResponse | null;
@@ -89,40 +90,75 @@ export default function ForYouClient() {
   const briefCacheRef = useRef<Record<string, BriefCacheEntry>>({});
   /** Bumps when a new `/api/news` payload loads so stale read-meta responses are ignored. */
   const feedGenerationRef = useRef(0);
+  /**
+   * Per-mode article snapshot. Avoids re-shuffling on every mode toggle —
+   * the wire pays only on first visit + explicit refresh (pull-to-refresh,
+   * long-absence wake, or page reload).
+   */
+  const articlesByModeRef = useRef<Map<FeedMode, Article[]>>(new Map());
+  /** Wall-clock for the last successful load; visibility wake refresh uses this. */
+  const lastLoadAtRef = useRef<number>(0);
 
-  /** Great Read + The Daily prefer ~7 min body reads; reader modules keep full pool. */
-  const feedLayoutArticles = useMemo(
-    () => orderArticlesForLongReadSections(articles),
-    [articles],
-  );
+  /**
+   * Articles arrive already long-read-ordered from `loadNews`, so the layout
+   * stays stable when later read-meta updates patch in real minute counts.
+   * (Re-sorting on every read-meta tick was the source of "discover is glitchy".)
+   */
+  const feedLayoutArticles = articles;
 
-  const loadNews = useCallback(async () => {
+  const loadNews = useCallback(async (opts?: { force?: boolean }) => {
+    const force = opts?.force ?? false;
+    const currentMode = modeRef.current;
+
     feedGenerationRef.current += 1;
-    setNewsLoading(true);
     setNewsMessage(null);
-    briefCacheRef.current = {};
-    setSummary(null);
-    setPanelStatus("idle");
-    setSummaryError(undefined);
-    setReaderMediumBrief({ status: "idle", data: null, error: undefined });
-    setReaderShortBrief({ status: "idle", data: null, error: undefined });
+
+    if (!force) {
+      const cached = articlesByModeRef.current.get(currentMode);
+      if (cached && cached.length > 0) {
+        setArticles(cached);
+        setNewsLoading(false);
+        return;
+      }
+    }
+
+    if (force) {
+      // Only an explicit user-driven refresh wipes derived state for the panel/reader.
+      briefCacheRef.current = {};
+      setSummary(null);
+      setPanelStatus("idle");
+      setSummaryError(undefined);
+      setReaderMediumBrief({ status: "idle", data: null, error: undefined });
+      setReaderShortBrief({ status: "idle", data: null, error: undefined });
+    }
+
+    setNewsLoading(true);
+
     const params = new URLSearchParams();
-    params.set("tags", modeToTags(modeRef.current));
-    // Always bypass server feed cache from the browser. Navigation Timing often
-    // reports "navigate" (not "reload") under Next/Turbopack, so reload detection is unreliable.
-    params.set("refresh", "1");
-    params.set(
-      "rot",
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random()}`,
-    );
+    params.set("tags", modeToTags(currentMode));
+    if (force) {
+      // Bypass server feed cache + reshuffle only on explicit refresh.
+      params.set("refresh", "1");
+      params.set(
+        "rot",
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`,
+      );
+    }
+
     try {
       const res = await fetch(`/api/news?${params.toString()}`, {
         cache: "no-store",
       });
       const json = (await res.json()) as NewsFeedResult;
-      setArticles(json.articles);
+      const ordered =
+        Array.isArray(json.articles) && json.articles.length > 0
+          ? orderArticlesForLongReadSections(json.articles)
+          : json.articles;
+      articlesByModeRef.current.set(currentMode, ordered);
+      lastLoadAtRef.current = Date.now();
+      setArticles(ordered);
       if (!json.ok) {
         setNewsMessage(json.error);
       } else {
@@ -136,10 +172,46 @@ export default function ForYouClient() {
     }
   }, []);
 
-  /** Load on mount and whenever the feed mode changes (always fresh from wire). */
+  /**
+   * Load on mount; on mode change, prefer the per-mode snapshot.
+   * Articles only re-shuffle on explicit refresh (pull-to-refresh, long-absence
+   * wake, or full page reload — each starts with an empty `articlesByModeRef`).
+   */
   useEffect(() => {
     void loadNews();
   }, [mode, loadNews]);
+
+  /**
+   * If the app was hidden for a while and the user returns, treat it like
+   * "opened the app after closing it" and pull a fresh shuffle. 5 min was
+   * chosen to match the perceived freshness of a typical news app.
+   */
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const STALE_MS = 5 * 60 * 1000;
+    const hiddenAtRef = { current: 0 };
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAtRef.current = Date.now();
+        return;
+      }
+      if (document.visibilityState !== "visible") return;
+      const hiddenFor = hiddenAtRef.current
+        ? Date.now() - hiddenAtRef.current
+        : 0;
+      hiddenAtRef.current = 0;
+      const ageSinceLastLoad = lastLoadAtRef.current
+        ? Date.now() - lastLoadAtRef.current
+        : Number.POSITIVE_INFINITY;
+      if (hiddenFor >= STALE_MS || ageSinceLastLoad >= STALE_MS) {
+        articlesByModeRef.current.clear();
+        void loadNews({ force: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [loadNews]);
+
 
   /** Measure full-page read length for the top of feed so ~7 min ranking uses real text, not snippets. */
   useEffect(() => {
@@ -184,14 +256,25 @@ export default function ForYouClient() {
         const map = new Map(rows.map((r) => [r.id, r]));
         setArticles((prev) => {
           if (feedGenerationRef.current !== gen) return prev;
-          return prev.map((a) => {
+          let mutated = false;
+          const next = prev.map((a) => {
             const hit = map.get(a.id);
             if (!hit) return a;
             if (hit.ok && typeof hit.minutes === "number" && hit.minutes > 0) {
+              mutated = true;
               return { ...a, readMinutesFromFetch: hit.minutes };
             }
-            return { ...a, readMinutesFromFetch: null };
+            if (a.readMinutesFromFetch !== null) {
+              mutated = true;
+              return { ...a, readMinutesFromFetch: null };
+            }
+            return a;
           });
+          if (!mutated) return prev;
+          // Persist the better minute labels into the per-mode cache so
+          // re-entering this mode within the session keeps them.
+          articlesByModeRef.current.set(modeRef.current, next);
+          return next;
         });
       } catch {
         /* aborted or network */
@@ -534,8 +617,11 @@ export default function ForYouClient() {
               voiceDisabled={newsLoading || articles.length === 0}
             />
 
-            <div
-              data-feed-scroll
+            <PullToRefresh
+              onRefresh={async () => {
+                await loadNews({ force: true });
+              }}
+              scrollDataAttr="data-feed-scroll"
               className={`relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain ${
                 mode === "catchup" ||
                 mode === "relax" ||
@@ -594,7 +680,7 @@ export default function ForYouClient() {
                   loading={newsLoading}
                 />
               )}
-            </div>
+            </PullToRefresh>
 
             <BottomNav active="you" />
           </>
