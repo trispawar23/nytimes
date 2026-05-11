@@ -840,7 +840,7 @@ export function ArticleReaderScreen({
             <h2 className="border-b border-black/15 pb-3 font-serif text-[20.55px] font-bold text-black [border-bottom-width:1.027px]">
               Discover other articles
             </h2>
-            <p className="mt-4 font-sans text-[16.44px] leading-[20.55px] text-[#373737]">
+            <p className="mt-4 font-serif text-[18.49px] font-normal leading-[22.6px] text-[#4D4D4D]">
               Keep exploring stories from the feed—tap any headline below to open
               it in the reader.
             </p>
