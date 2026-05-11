@@ -66,10 +66,19 @@ export function useReaderBackGesture(onClose: () => void): ReaderBackHints {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    /**
+     * Unique per-mount tag. Lets the popstate listener distinguish a real
+     * back action (state.__readerOpen !== ourId) from React Strict Mode's
+     * cleanup → remount sequence (state.__readerOpen === ourId because
+     * the remount already pushed a fresh entry before the popstate from
+     * the previous cleanup's history.back() is dispatched).
+     */
+    const ourId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     let pushedByUs = false;
     try {
       window.history.pushState(
-        { __readerOpen: true },
+        { __readerOpen: ourId },
         "",
         window.location.href,
       );
@@ -79,8 +88,16 @@ export function useReaderBackGesture(onClose: () => void): ReaderBackHints {
     }
 
     const onPopState = () => {
-      // The system back action already popped our state, so we don't need
-      // to call history.back() during cleanup.
+      const cur = (window.history.state ?? null) as
+        | { __readerOpen?: string }
+        | null;
+      if (cur?.__readerOpen === ourId) {
+        // We're still inside our own pushed entry — this popstate came from
+        // a Strict Mode-style cleanup→remount, not from the user/system
+        // back. Ignore so the reader doesn't close instantly on open.
+        return;
+      }
+      // Real back action: state was popped out from under us.
       pushedByUs = false;
       onCloseRef.current();
     };
@@ -154,11 +171,13 @@ export function useReaderBackGesture(onClose: () => void): ReaderBackHints {
         document.removeEventListener("touchcancel", onTouchCancel);
       }
       // If the reader closed for some other reason (in-app button, parent
-      // unmounting, etc.) drop our pushed entry so back stays clean.
+      // unmounting, etc.) drop OUR pushed entry so back stays clean.
+      // The `=== ourId` check prevents the Strict Mode double-mount from
+      // popping a remount's entry mid-flight.
       const state = (window.history.state ?? null) as
-        | { __readerOpen?: boolean }
+        | { __readerOpen?: string }
         | null;
-      if (pushedByUs && state?.__readerOpen) {
+      if (pushedByUs && state?.__readerOpen === ourId) {
         try {
           window.history.back();
         } catch {
