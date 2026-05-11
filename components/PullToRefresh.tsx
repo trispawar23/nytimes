@@ -253,23 +253,27 @@ export const PullToRefresh = forwardRef<PullToRefreshHandle, Props>(
           </div>
         ) : null}
 
-        {/* Idle: no transform / will-change → zero compositing cost on the
-            feed. Only wrap in a transform layer while actively pulling. */}
-        {usingTransform ? (
-          <div
-            style={{
-              transform: `translateY(${pullPx}px)`,
-              transition: refreshing
-                ? "transform 200ms ease-out"
-                : "none",
-              willChange: "transform",
-            }}
-          >
-            {children}
-          </div>
-        ) : (
-          children
-        )}
+        {/*
+          Always render the same wrapper so children don't remount when the
+          pull state toggles — remounting was resetting feed scroll position
+          and inner state (e.g. carousel scroll). Style is omitted at idle
+          so no compositing layer / will-change cost is paid on the feed.
+        */}
+        <div
+          style={
+            usingTransform
+              ? {
+                  transform: `translateY(${pullPx}px)`,
+                  transition: refreshing
+                    ? "transform 200ms ease-out"
+                    : "none",
+                  willChange: "transform",
+                }
+              : undefined
+          }
+        >
+          {children}
+        </div>
       </div>
     );
   },

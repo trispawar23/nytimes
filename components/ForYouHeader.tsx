@@ -89,20 +89,34 @@ export function ForYouHeader({
 
     lastScrollTopRef.current = el.scrollTop;
 
+    /**
+     * Distance from the bottom inside which we ignore scroll-direction
+     * changes. iOS Safari's rubber-band overshoot at the very end of the
+     * scroll fires a small negative dy as the content springs back, which
+     * was popping the mode selector open right at the bottom of the feed.
+     */
+    const BOTTOM_DEAD_ZONE_PX = 24;
+
     const handle = () => {
       const y = el.scrollTop;
+      const maxScroll = el.scrollHeight - el.clientHeight;
       const last = lastScrollTopRef.current;
       const dy = y - last;
+      lastScrollTopRef.current = y;
 
       if (y <= COMPACT_SCROLL_THRESHOLD_PX) {
         setCompact(false);
-      } else if (dy > COMPACT_DIRECTION_DELTA_PX) {
+        return;
+      }
+
+      // Ignore bounce/rubber-band events near the end of the scroll.
+      if (maxScroll > 0 && y >= maxScroll - BOTTOM_DEAD_ZONE_PX) return;
+
+      if (dy > COMPACT_DIRECTION_DELTA_PX) {
         setCompact(true);
       } else if (dy < -COMPACT_DIRECTION_DELTA_PX) {
         setCompact(false);
       }
-
-      lastScrollTopRef.current = y;
     };
 
     el.addEventListener("scroll", handle, { passive: true });
