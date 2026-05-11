@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Pause, Play } from "lucide-react";
+import { AlertCircle, Loader2, Pause, Play } from "lucide-react";
 import {
   type DragEvent,
   type TransitionEvent,
@@ -99,12 +99,17 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
     [dragGuideFading, dismissDragGuide],
   );
 
+  /**
+   * Keep the dock visible across every phase that still owns a session
+   * (including the brief `error` window). Only the truly idle dock — meta
+   * cleared and key released — falls back to the "play random" affordance.
+   */
   const activeVisible =
     !!snap.meta &&
-    !!snap.key &&
     (snap.phase === "loading" ||
       snap.phase === "playing" ||
-      snap.phase === "paused");
+      snap.phase === "paused" ||
+      snap.phase === "error");
 
   const onDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
     if (!dragEventCarriesArticle(e)) return;
@@ -409,22 +414,31 @@ export function ListenNowPlayingChip({ articles, onOpenArticle }: Props) {
               onClick={(e) => {
                 e.stopPropagation();
                 if (snap.phase === "loading") return;
+                if (snap.phase === "error") return;
                 togglePuterPlaybackPause();
               }}
-              disabled={snap.phase === "loading"}
-              className="flex size-[19px] shrink-0 items-center justify-center text-white disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
+              disabled={snap.phase === "loading" || snap.phase === "error"}
+              className="flex size-[19px] shrink-0 items-center justify-center text-white disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
               aria-label={
                 snap.phase === "loading"
                   ? "Loading audio"
-                  : snap.phase === "playing"
-                    ? "Pause"
-                    : snap.phase === "paused"
-                      ? "Resume"
-                      : "Play"
+                  : snap.phase === "error"
+                    ? "Audio unavailable"
+                    : snap.phase === "playing"
+                      ? "Pause"
+                      : snap.phase === "paused"
+                        ? "Resume"
+                        : "Play"
               }
             >
               {snap.phase === "loading" ? (
                 <Loader2 className="size-[18px] animate-spin" aria-hidden />
+              ) : snap.phase === "error" ? (
+                <AlertCircle
+                  className="size-[18px] text-white"
+                  strokeWidth={2}
+                  aria-hidden
+                />
               ) : snap.phase === "playing" ? (
                 <Pause
                   className="size-[18px] text-white"

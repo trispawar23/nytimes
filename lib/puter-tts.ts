@@ -57,6 +57,35 @@ function computePaused(): boolean {
   return activePhase === "paused";
 }
 
+/**
+ * iOS Safari and some desktop builds silently stop `speechSynthesis` after
+ * ~15 s and fire `onend` even though the utterance is unfinished. A periodic
+ * pause+resume keeps the engine awake long enough to finish article-length
+ * passages without the dock disappearing mid-listen.
+ */
+let keepAliveTimer: number | null = null;
+
+function startKeepAlive() {
+  const syn = getSynth();
+  if (!syn) return;
+  if (keepAliveTimer !== null) return;
+  keepAliveTimer = window.setInterval(() => {
+    const s = getSynth();
+    if (!s) return;
+    if (!s.speaking) return;
+    if (s.paused) return;
+    // pause+resume is the documented WebKit workaround for the 15 s cutoff.
+    s.pause();
+    s.resume();
+  }, 12_000);
+}
+
+function stopKeepAlive() {
+  if (keepAliveTimer === null) return;
+  window.clearInterval(keepAliveTimer);
+  keepAliveTimer = null;
+}
+
 function notify() {
   snapshot = {
     key: activeKey,
@@ -84,6 +113,7 @@ export function replacePlaybackKeyIfMatch(fromKey: string, toKey: string): void 
 }
 
 function finishPlayback() {
+  stopKeepAlive();
   activeUtterance = null;
   activeKey = null;
   activePhase = "idle";
@@ -92,6 +122,7 @@ function finishPlayback() {
 }
 
 export function stopPuterPlayback(): void {
+  stopKeepAlive();
   const syn = getSynth();
   if (syn) {
     syn.cancel();
@@ -109,6 +140,7 @@ export function togglePuterPlaybackPause(): void {
 
   if (syn.speaking && !syn.paused) {
     syn.pause();
+    stopKeepAlive();
     activePhase = "paused";
     notify();
     return;
@@ -116,6 +148,7 @@ export function togglePuterPlaybackPause(): void {
 
   if (syn.paused || activePhase === "paused") {
     syn.resume();
+    startKeepAlive();
     activePhase = "playing";
     notify();
   }
@@ -217,36 +250,65 @@ export async function runPuterListen(options: {
 
     activeUtterance = utterance;
 
+    /**
+     * `phase` stays "loading" until the engine reports it actually started
+     * speaking — that's what keeps the dock's spinner up until audio is
+     * audible (iOS in particular has a noticeable warm-up between speak()
+     * and the first sample).
+     */
+    utterance.onstart = () => {
+      if (activeUtterance !== utterance) return;
+      activePhase = "playing";
+      startKeepAlive();
+      notify();
+    };
+
     utterance.onend = () => {
       if (activeUtterance !== utterance) return;
+      stopKeepAlive();
       finishPlayback();
     };
 
     utterance.onerror = () => {
       if (activeUtterance !== utterance) return;
+      stopKeepAlive();
       activeUtterance = null;
       activeKey = null;
-      activeMeta = null;
       activePhase = "error";
+      // Intentionally keep `activeMeta` so the dock doesn't blank out — the
+      // user can see which article failed and tap to retry.
       notify();
       window.setTimeout(() => {
         activePhase = "idle";
+        activeMeta = null;
         notify();
       }, 4000);
     };
 
     syn.speak(utterance);
-    activePhase = "playing";
-    notify();
+
+    /**
+     * Some engines never fire `onstart`. After a short grace period, flip
+     * to playing anyway so the spinner doesn't get stuck.
+     */
+    window.setTimeout(() => {
+      if (activeUtterance !== utterance) return;
+      if (activePhase !== "loading") return;
+      activePhase = "playing";
+      startKeepAlive();
+      notify();
+    }, 1500);
+
     return { didStartNewPlayback: true };
   } catch {
+    stopKeepAlive();
     activeUtterance = null;
     activeKey = null;
-    activeMeta = null;
     activePhase = "error";
     notify();
     window.setTimeout(() => {
       activePhase = "idle";
+      activeMeta = null;
       notify();
     }, 4000);
     throw new Error(

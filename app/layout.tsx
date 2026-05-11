@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 /**
@@ -53,6 +54,7 @@ export default function RootLayout({
     <html lang="en" className={poppins.variable}>
       <body className="min-h-dvh overflow-x-hidden font-sans antialiased">
         {children}
+        <Analytics />
       </body>
     </html>
   );
