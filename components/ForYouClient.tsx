@@ -98,6 +98,12 @@ export default function ForYouClient() {
   const articlesByModeRef = useRef<Map<FeedMode, Article[]>>(new Map());
   /** Wall-clock for the last successful load; visibility wake refresh uses this. */
   const lastLoadAtRef = useRef<number>(0);
+  /**
+   * First `loadNews` of this React tree's lifetime is implicitly a refresh
+   * so that a fresh tab / page reload / "reopen the app" pulls a new shuffle
+   * past the server's in-memory feed cache.
+   */
+  const firstLoadRef = useRef(true);
 
   /**
    * Articles arrive already long-read-ordered from `loadNews`, so the layout
@@ -107,7 +113,13 @@ export default function ForYouClient() {
   const feedLayoutArticles = articles;
 
   const loadNews = useCallback(async (opts?: { force?: boolean }) => {
-    const force = opts?.force ?? false;
+    const wasFirstLoad = firstLoadRef.current;
+    firstLoadRef.current = false;
+    /**
+     * Cold start (reload / new tab / "reopen the app") implicitly forces a
+     * fresh shuffle. After that, only explicit refresh actions force.
+     */
+    const force = opts?.force ?? wasFirstLoad;
     const currentMode = modeRef.current;
 
     feedGenerationRef.current += 1;
