@@ -535,6 +535,7 @@ export default function ForYouClient() {
             />
 
             <div
+              data-feed-scroll
               className={`relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain ${
                 mode === "catchup" ||
                 mode === "relax" ||

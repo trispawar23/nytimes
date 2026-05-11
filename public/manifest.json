@@ -1,0 +1,27 @@
+{
+  "name": "For You — Next Generation",
+  "short_name": "For You",
+  "description": "AI-native news interaction prototype.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F8F8F8",
+  "theme_color": "#ffffff",
+  "lang": "en",
+  "categories": ["news", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

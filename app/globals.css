@@ -6,8 +6,18 @@
   color-scheme: light;
 }
 
+html,
 body {
-  @apply min-h-dvh overflow-x-hidden bg-[#eceae6] text-ink antialiased;
+  /*
+   * Prevent iOS Safari from “bounce”-scrolling the document itself; inner panes
+   * own scrolling. Combined with PhoneFrame's 100dvh container this keeps the
+   * URL bar from changing layout height on each scroll.
+   */
+  overscroll-behavior-y: none;
+}
+
+body {
+  @apply min-h-dvh overflow-x-hidden bg-[#F8F8F8] text-ink antialiased;
 }
 
 /* Hide scrollbar for horizontal chips while keeping scroll */

@@ -121,22 +121,27 @@ export function ArticleReadTimeRail({
     [disabled, onChange, s0, s2, stopIdx, stops],
   );
 
-  function stopVisual(idx: 0 | 1 | 2) {
-    const m = stops[idx];
-    const on = m === value;
+  /** Static rail dot — every stop renders the same black 8px circle; the moving thumb sits over the active one. */
+  function railDot() {
     return (
       <div
         className="pointer-events-none flex size-[34px] items-center justify-center"
         aria-hidden
       >
-        {on ? (
-          <span className="box-border size-[26px] shrink-0 rounded-full border-[3px] border-black bg-white dark:border-neutral-100 dark:bg-neutral-950" />
-        ) : (
-          <span className="size-2 shrink-0 rounded-full bg-black dark:bg-neutral-100" />
-        )}
+        <span className="size-2 shrink-0 rounded-full bg-black dark:bg-neutral-100" />
       </div>
     );
   }
+
+  /**
+   * Thumb position: each stop is centered in its 34px grid column.
+   * - Stop 0 center → 17px from the left
+   * - Stop 1 center → 50%
+   * - Stop 2 center → 17px from the right
+   * We position by `left` with `translateX(-50%)` so the thumb is centered on the dot.
+   */
+  const thumbLeft =
+    stopIdx === 0 ? "17px" : stopIdx === 1 ? "50%" : "calc(100% - 17px)";
 
   return (
     <div className="flex w-full max-w-[379px] flex-col items-start gap-[6px]">
@@ -149,12 +154,17 @@ export function ArticleReadTimeRail({
             className="pointer-events-none grid w-full grid-cols-[34px_1fr_34px_1fr_34px] items-center"
             aria-hidden
           >
-            <div className="flex justify-center">{stopVisual(0)}</div>
+            <div className="flex justify-center">{railDot()}</div>
             <div className="h-[2px] min-h-[2px] bg-black dark:bg-neutral-200" />
-            <div className="flex justify-center">{stopVisual(1)}</div>
+            <div className="flex justify-center">{railDot()}</div>
             <div className="h-[2px] min-h-[2px] bg-black dark:bg-neutral-200" />
-            <div className="flex justify-center">{stopVisual(2)}</div>
+            <div className="flex justify-center">{railDot()}</div>
           </div>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 box-border block size-[26px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-black bg-white shadow-[0_1px_3px_rgba(0,0,0,0.18)] transition-[left] duration-[320ms] ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none dark:border-neutral-100 dark:bg-neutral-950"
+            style={{ left: thumbLeft }}
+          />
           <div
             ref={trackRef}
             role="slider"
