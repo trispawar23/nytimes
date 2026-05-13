@@ -67,6 +67,9 @@ export default function ForYouClient() {
   const [readingTime, setReadingTime] = useState(3);
   const [question, setQuestion] = useState("");
   const [voiceActive, setVoiceActive] = useState(false);
+  const [assistantRecommendations, setAssistantRecommendations] = useState<Article[]>([]);
+  const [assistantRecommendationsTitle, setAssistantRecommendationsTitle] =
+    useState<string | null>(null);
 
   const [panelStatus, setPanelStatus] = useState<PanelStatus>("idle");
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
@@ -556,16 +559,222 @@ export default function ForYouClient() {
     if (!selected || selected.id !== art.id) {
       setSelected(art);
     }
+    if (!panelOpen) {
+      setQuestion("");
+      setSummary(null);
+      setSummaryError(undefined);
+      setPanelStatus("idle");
+      setAssistantRecommendations([]);
+      setAssistantRecommendationsTitle(null);
+    }
     setPanelOpen(true);
     setVoiceActive(true);
-  }, [feedLayoutArticles, selected]);
-
-  const onVoiceToggle = useCallback(() => {
-    setVoiceActive((v) => !v);
-    setPanelOpen((open) => open || true);
-  }, []);
+  }, [feedLayoutArticles, panelOpen, selected]);
 
   const briefingArticle = readerArticle ?? selected;
+
+  const extractVoiceReadingMinutes = useCallback((text: string): number | null => {
+    const t = text.toLowerCase();
+    const match = t.match(
+      /\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:min|mins|minute|minutes)\b/,
+    );
+    if (!match) return null;
+    const wordToNumber: Record<string, number> = {
+      one: 1,
+      two: 2,
+      three: 3,
+      four: 4,
+      five: 5,
+      six: 6,
+      seven: 7,
+      eight: 8,
+      nine: 9,
+      ten: 10,
+      eleven: 11,
+      twelve: 12,
+    };
+    const raw = match[1]!;
+    const n = wordToNumber[raw] ?? Number(raw);
+    if (!Number.isFinite(n)) return null;
+    return Math.min(12, Math.max(1, Math.round(n)));
+  }, []);
+
+  const isFeedBriefingCommand = useCallback((text: string): boolean => {
+    const t = text.toLowerCase();
+    return (
+      /\b(today|today's|todays|latest|top|current|news|headlines|highlights|briefing|catch me up)\b/.test(
+        t,
+      ) ||
+      /\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:min|mins|minute|minutes)\b/.test(
+        t,
+      )
+    );
+  }, []);
+
+  const isArticleRecommendationCommand = useCallback((text: string): boolean => {
+    const t = text.toLowerCase();
+    return /\b(article|articles|story|stories|recommend|recommendations|suggest|suggested|interesting|related)\b/.test(
+      t,
+    );
+  }, []);
+
+  const pickRecommendedArticles = useCallback((command: string): Article[] => {
+    const t = command.toLowerCase();
+    const selectedId = selected?.id ?? readerArticle?.id ?? null;
+    const haystackFor = (article: Article) =>
+      `${article.title} ${article.description} ${article.category}`.toLowerCase();
+
+    const queryWords = t
+      .split(/\W+/)
+      .map((w) => w.trim())
+      .filter(
+        (w) =>
+          w.length > 3 &&
+          !["article", "articles", "story", "stories", "recommend", "recommendations", "suggest", "suggested", "interesting", "related", "please", "me", "show", "give", "find", "more", "some", "find"].includes(
+            w,
+          ),
+      );
+
+    const scored = feedLayoutArticles
+      .filter((article) => selectedId ? article.id !== selectedId : true)
+      .map((article) => {
+        const haystack = haystackFor(article);
+        let score = 0;
+        for (const word of queryWords) {
+          if (haystack.includes(word)) score += 3;
+        }
+        if (t.includes("related") && selected) {
+          const selectedWords = selected.title
+            .toLowerCase()
+            .split(/\W+/)
+            .filter((w) => w.length > 4);
+          score += selectedWords.reduce(
+            (sum, word) => sum + (haystack.includes(word) ? 2 : 0),
+            0,
+          );
+        }
+        if (t.includes("interesting")) {
+          score += 1;
+        }
+        return { article, score };
+      })
+      .sort((a, b) => b.score - a.score || a.article.title.localeCompare(b.article.title));
+
+    if (queryWords.length > 0) {
+      const weighted = scored.filter((entry) => entry.score > 0).map((entry) => entry.article);
+      if (weighted.length > 0) return weighted.slice(0, 4);
+    }
+
+    // Fall back to the first non-selected articles so suggestions are stable,
+    // but not always the same if the feed changes.
+    return scored.slice(0, 4).map((entry) => entry.article);
+  }, [feedLayoutArticles, readerArticle?.id, selected]);
+
+  const buildFeedHighlightsArticle = useCallback((): Article | null => {
+    const sourceArticles = feedLayoutArticles.slice(0, 8);
+    if (sourceArticles.length === 0) return null;
+
+    const body = sourceArticles
+      .map((article, index) => {
+        const parts = [
+          `${index + 1}. ${article.title}`,
+          article.description,
+          article.content,
+          article.source ? `Source: ${article.source}` : "",
+          article.publishedAt ? `Published: ${article.publishedAt}` : "",
+        ]
+          .map((x) => x.trim())
+          .filter(Boolean);
+        return parts.join("\n");
+      })
+      .join("\n\n");
+
+    return {
+      id: `voice-feed-highlights:${sourceArticles.map((a) => a.id).join("|")}`,
+      title: "Today's highlights",
+      description: "A voice-requested briefing from the current news feed.",
+      content: body,
+      source: "Current feed",
+      author: null,
+      url: "",
+      imageUrl: sourceArticles[0]?.imageUrl ?? null,
+      publishedAt: new Date().toISOString(),
+      category: "briefing",
+    };
+  }, [feedLayoutArticles]);
+
+  const handleVoiceCommand = useCallback(
+    (text: string) => {
+      const command = text.trim();
+      if (!command) return;
+
+      setQuestion(command);
+      setVoiceActive(false);
+      setPanelOpen(true);
+      setAssistantRecommendations([]);
+      setAssistantRecommendationsTitle(null);
+
+      const requestedMinutes = extractVoiceReadingMinutes(command);
+      if (requestedMinutes !== null) {
+        setReadingTime(requestedMinutes);
+        readingTimeRef.current = requestedMinutes;
+      }
+
+      if (isArticleRecommendationCommand(command)) {
+        const recs = pickRecommendedArticles(command);
+        if (recs.length > 0) {
+          setAssistantRecommendations(recs);
+          setAssistantRecommendationsTitle(
+            isFeedBriefingCommand(command)
+              ? "Related articles to today's highlights"
+              : "Recommended articles",
+          );
+          setPanelStatus("idle");
+          setSummary(null);
+          setSummaryError(undefined);
+          return;
+        }
+
+        setPanelStatus("idle");
+        setSummary(null);
+        setSummaryError(undefined);
+        return;
+      }
+
+      const art = isFeedBriefingCommand(command)
+        ? buildFeedHighlightsArticle()
+        : (briefingArticle ?? feedLayoutArticles[0]);
+      if (!art) {
+        setPanelStatus("error");
+        setSummary(null);
+        setSummaryError("No stories are loaded yet for a voice briefing.");
+        return;
+      }
+
+      if (!art.id.startsWith("voice-feed-highlights:") && (!selected || selected.id !== art.id)) {
+        setSelected(art);
+      }
+
+      void summarize({
+        intent: "ask",
+        userQuery: command,
+        articleOverride: art,
+        readingTimeOverride: requestedMinutes ?? readingTimeRef.current,
+        force: true,
+      });
+    },
+    [
+      briefingArticle,
+      buildFeedHighlightsArticle,
+      extractVoiceReadingMinutes,
+      feedLayoutArticles,
+      isArticleRecommendationCommand,
+      isFeedBriefingCommand,
+      pickRecommendedArticles,
+      selected,
+      summarize,
+    ],
+  );
 
   /**
    * Catch Me Up panel rail's Full stop snaps to the briefing article's
@@ -734,22 +943,19 @@ export default function ForYouClient() {
           articleFullMinutes={briefingArticleFullMinutes}
           question={question}
           onQuestionChange={setQuestion}
-          onAsk={() => {
-            if (!briefingArticle) return;
-            void summarize({
-              intent: "ask",
-              userQuery: question.trim(),
-              articleOverride: briefingArticle,
-            });
-          }}
           voiceActive={voiceActive}
-          onVoiceToggle={onVoiceToggle}
-          onCatchMeUp={() => {
-            if (!briefingArticle) return;
-            void summarize({
-              intent: "default",
-              articleOverride: briefingArticle,
-            });
+          onVoiceActiveChange={(active) => {
+            setVoiceActive(active);
+            setPanelOpen(true);
+          }}
+          onVoiceTranscript={handleVoiceCommand}
+          recommendations={assistantRecommendations}
+          recommendationsTitle={assistantRecommendationsTitle}
+          onOpenRecommendation={(art) => {
+            setSelected(art);
+            setReaderArticle(art);
+            setPanelOpen(false);
+            setVoiceActive(false);
           }}
         />
       </div>

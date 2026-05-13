@@ -36,6 +36,10 @@ const HALF_LENGTH_RULES_PATH = path.join(
   "editorial-rules-half-length.md",
 );
 
+let cachedEditorialRules: string | null = null;
+let cachedHalfLengthEditorialRules: string | null = null;
+let cachedOneMinuteEditorialRules: string | null = null;
+
 /** Medium rail stop → adaptive half-length summary rules. */
 const HALF_LENGTH_READING_MINUTES = 3;
 
@@ -49,10 +53,14 @@ const ONE_MINUTE_RULES_PATH = path.join(
 );
 
 async function loadEditorialRules(): Promise<string> {
+  if (cachedEditorialRules) return cachedEditorialRules;
   for (const p of RULES_CANDIDATE_PATHS) {
     try {
       const text = await readFile(p, "utf8");
-      if (text.trim().length > 0) return text;
+      if (text.trim().length > 0) {
+        cachedEditorialRules = text;
+        return text;
+      }
     } catch {
       /* try next */
     }
@@ -60,41 +68,52 @@ async function loadEditorialRules(): Promise<string> {
   logSummarize("Using embedded editorial rules (file not found on disk)", {
     cwd: process.cwd(),
   });
+  cachedEditorialRules = EDITORIAL_RULES_FALLBACK;
   return EDITORIAL_RULES_FALLBACK;
 }
 
 async function loadHalfLengthEditorialRules(): Promise<string> {
+  if (cachedHalfLengthEditorialRules) return cachedHalfLengthEditorialRules;
   try {
     const text = await readFile(HALF_LENGTH_RULES_PATH, "utf8");
-    if (text.trim().length > 0) return text;
+    if (text.trim().length > 0) {
+      cachedHalfLengthEditorialRules = text;
+      return text;
+    }
   } catch {
     /* fall through */
   }
   logSummarize("Half-length rules file missing; using embedded stub", {});
-  return [
+  cachedHalfLengthEditorialRules = [
     "# Editorial Rules — Adaptive Half-Length Summary",
     "",
     "Return JSON only: {\"summary\":\"...\",\"confidence\":\"high|medium|low\",\"limitations\":\"...\"}",
     "",
     "Summary ~half the article length. Never invent facts. Use only the article body.",
   ].join("\n");
+  return cachedHalfLengthEditorialRules;
 }
 
 async function loadOneMinuteEditorialRules(): Promise<string> {
+  if (cachedOneMinuteEditorialRules) return cachedOneMinuteEditorialRules;
   try {
     const text = await readFile(ONE_MINUTE_RULES_PATH, "utf8");
-    if (text.trim().length > 0) return text;
+    if (text.trim().length > 0) {
+      cachedOneMinuteEditorialRules = text;
+      return text;
+    }
   } catch {
     /* fall through */
   }
   logSummarize("One-minute rules file missing; using embedded stub", {});
-  return [
+  cachedOneMinuteEditorialRules = [
     "# Editorial Rules — 1 Minute News Summary",
     "",
     "Return JSON only: {\"summary\":\"...\",\"key_takeaway\":\"...\",\"confidence\":\"high|medium|low\",\"limitations\":\"...\"}",
     "",
     "Summary ~80–140 words, one-minute read. Never invent facts.",
   ].join("\n");
+  return cachedOneMinuteEditorialRules;
 }
 
 function logSummarize(message: string, context?: Record<string, string>) {
@@ -555,11 +574,18 @@ async function postSummarize(
             : "Reader question / instruction: (none)",
         ].join("\n");
 
+  const maxTokens = useHalfLengthAdapter
+    ? 720
+    : useOneMinuteAdapter
+      ? 560
+      : 620;
+
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
     completion = await client.chat.completions.create({
       model: process.env.OPENAI_SUMMARY_MODEL ?? "gpt-4o-mini",
       temperature: useHalfLengthAdapter ? 0.22 : useOneMinuteAdapter ? 0.24 : 0.35,
+      max_tokens: maxTokens,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system },
@@ -648,6 +674,7 @@ async function postSummarize(
         const repairCompletion = await client.chat.completions.create({
           model: process.env.OPENAI_SUMMARY_MODEL ?? "gpt-4o-mini",
           temperature: 0.18,
+          max_tokens: 760,
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: system },
@@ -713,6 +740,7 @@ async function postSummarize(
         const repairCompletion = await client.chat.completions.create({
           model: process.env.OPENAI_SUMMARY_MODEL ?? "gpt-4o-mini",
           temperature: 0.18,
+          max_tokens: 600,
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: system },
