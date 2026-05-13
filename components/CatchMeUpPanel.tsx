@@ -1,13 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, BookOpen, Loader2, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, ChevronRight, Loader2, Mic, Square, X } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import {
   articleReadRailStops,
   nearestArticleReadRailStop,
 } from "@/lib/reading-stats";
-import type { FeedMode, SummaryResponse } from "@/lib/types";
+import type { Article, FeedMode, SummaryResponse } from "@/lib/types";
 import { ArticleReadTimeRail } from "./ArticleReadTimeRail";
 import { VoiceInteraction } from "./VoiceInteraction";
 
@@ -32,10 +32,12 @@ type Props = {
   articleFullMinutes?: number;
   question: string;
   onQuestionChange: (q: string) => void;
-  onAsk: () => void;
   voiceActive: boolean;
-  onVoiceToggle: () => void;
-  onCatchMeUp: () => void;
+  onVoiceActiveChange: (active: boolean) => void;
+  onVoiceTranscript: (text: string) => void;
+  recommendations: Article[];
+  recommendationsTitle: string | null;
+  onOpenRecommendation: (article: Article) => void;
 };
 
 export function CatchMeUpPanel({
@@ -50,10 +52,12 @@ export function CatchMeUpPanel({
   articleFullMinutes,
   question,
   onQuestionChange,
-  onAsk,
   voiceActive,
-  onVoiceToggle,
-  onCatchMeUp,
+  onVoiceActiveChange,
+  onVoiceTranscript,
+  recommendations,
+  recommendationsTitle,
+  onOpenRecommendation,
 }: Props) {
   const busy = status === "loading";
   const readRailStops = useMemo(
@@ -76,207 +80,200 @@ export function CatchMeUpPanel({
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="absolute inset-0 z-[110] flex flex-col bg-white/96 backdrop-blur-md"
-          initial={{ opacity: 0, y: 24 }}
+          className="pointer-events-none absolute inset-x-0 top-[214px] z-[105] px-[14px]"
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 16 }}
+          exit={{ opacity: 0, y: 12, scale: 0.98 }}
           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="flex items-start justify-between gap-2 border-b border-rule px-4 py-3">
-            <div>
-              <p className="font-serif text-[clamp(14px,3.95vw,16.5px)] leading-snug text-ink">
-                Catch me up
-              </p>
-              <p className="mt-1 font-sans text-[11px] text-ink-muted">
-                Assistive briefing · not a replacement for reporting
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full border border-rule bg-white p-2 text-ink hover:bg-paper"
-              aria-label="Close panel"
-            >
-              <X className="h-4 w-4" />
+          <div className="sr-only">
+            <ArticleReadTimeRail
+              stops={readRailStops}
+              value={railValue}
+              onChange={onReadingTimeChange}
+              disabled={busy}
+            />
+            <textarea
+              value={question}
+              onChange={(e) => onQuestionChange(e.target.value)}
+              disabled={busy}
+              aria-label="Voice command transcript"
+            />
+            <button type="button" onClick={onClose}>
+              Close assistant
             </button>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
-            <div className="rounded-2xl border border-rule bg-white/80 p-3">
-              <div className="flex items-start gap-2">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                <p className="font-sans text-[11px] leading-relaxed text-ink-muted">
-                  Summaries follow{" "}
-                  <span className="font-semibold text-ink">lib/editorial-rules.md</span>{" "}
-                  on the server. The model only works from the excerpt available in
-                  this prototype.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-rule bg-white/70 px-3 py-3">
-              <div className="mb-2">
-                <p className="font-serif text-[12px] font-semibold text-ink">
-                  Reading time
-                </p>
-                <p className="font-sans text-[11px] text-ink-muted">
-                  Shapes density, not facts.
-                </p>
-              </div>
-              <ArticleReadTimeRail
-                stops={readRailStops}
-                value={railValue}
-                onChange={onReadingTimeChange}
+          <div className="pointer-events-auto max-h-[410px] overflow-hidden rounded-[8px] bg-white px-[18px] py-[18px] shadow-[0_6px_28px_rgba(0,0,0,0.16)] ring-1 ring-black/5 font-sans">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => onVoiceActiveChange(!voiceActive)}
                 disabled={busy}
-              />
+                className={`flex size-10 shrink-0 items-center justify-center rounded-full text-white shadow-[0_4px_14px_rgba(0,0,0,0.22)] disabled:opacity-45 ${
+                  voiceActive ? "bg-black" : "bg-black"
+                }`}
+                aria-label={voiceActive ? "Stop recording" : "Ask follow-up"}
+              >
+                {voiceActive ? (
+                  <Square className="size-4 fill-current" aria-hidden />
+                ) : (
+                  <Mic className="size-5" aria-hidden />
+                )}
+              </button>
+              <p className="min-w-0 flex-1 truncate font-sans text-[12px] font-medium text-black/55">
+                {voiceActive
+                  ? "Listening..."
+                  : busy
+                    ? "Working on it..."
+                    : data || recommendations.length > 0
+                      ? "Ask a follow-up"
+                      : "Voice assistant"}
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/5 text-black hover:bg-black/10"
+                aria-label="Close assistant"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
             </div>
 
             <VoiceInteraction
               active={voiceActive}
               busy={busy}
-              onToggle={onVoiceToggle}
+              onActiveChange={onVoiceActiveChange}
+              onTranscript={onVoiceTranscript}
+              hidden
             />
 
-            <div className="rounded-2xl border border-rule bg-white/80 p-3">
-              <label className="font-serif text-[12px] font-semibold text-ink">
-                Ask a question
-              </label>
-              <textarea
-                value={question}
-                onChange={(e) => onQuestionChange(e.target.value)}
-                disabled={busy}
-                rows={3}
-                placeholder="e.g., What changed since yesterday?"
-                className="mt-2 w-full resize-none rounded-xl border border-rule bg-paper px-3 py-2 font-sans text-[13px] text-ink outline-none ring-accent/30 focus:ring-2 disabled:opacity-50"
-              />
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onAsk}
-                className="mt-2 w-full rounded-full bg-ink py-2 font-serif text-[13px] text-paper disabled:opacity-40"
-              >
-                Update briefing
-              </button>
-            </div>
-
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onCatchMeUp}
-              className="w-full rounded-full border border-ink/15 bg-paper py-2 font-serif text-[13px] text-ink disabled:opacity-40"
-            >
-              Regenerate from article
-            </button>
-
-            <div className="rounded-2xl border border-rule bg-white/90 p-3">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-ink-muted" />
-                <p className="font-serif text-[12px] font-semibold text-ink">
-                  Briefing
-                </p>
-                <span className="ml-auto rounded-full bg-paper px-2 py-0.5 font-sans text-[10px] uppercase tracking-wide text-ink-muted">
-                  {mode}
-                </span>
+            {question.trim() ? (
+              <div className="mb-4 flex justify-end">
+                <div className="max-w-[82%] rounded-[6px] bg-black px-4 py-3 font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[15px] font-semibold leading-snug text-white">
+                  {question.trim()}
+                </div>
               </div>
+            ) : null}
 
-              {status === "idle" ? (
-                <p className="mt-3 font-sans text-[12px] text-ink-muted">
-                  Select a story, then tap{" "}
-                  <span className="font-semibold text-ink">Regenerate from article</span>{" "}
-                  or <span className="font-semibold text-ink">Update briefing</span> to run
-                  the model. The header mic only opens this panel.
+            {voiceActive ? (
+              <div className="flex min-h-[180px] items-center gap-4">
+                <span className="relative flex size-10 shrink-0 items-center justify-center">
+                  <span className="absolute size-10 animate-ping rounded-full bg-black/10" />
+                  <span className="size-5 rounded-full bg-black" />
+                </span>
+                <p className="font-sans text-[17px] font-semibold text-black">
+                  Listening...
                 </p>
-              ) : null}
+              </div>
+            ) : null}
 
-              {status === "loading" ? (
-                <div className="mt-4 flex items-center gap-2 font-sans text-[12px] text-ink-muted">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generating a constrained brief…
+            {status === "idle" && !voiceActive && recommendations.length === 0 ? (
+              <div className="flex min-h-[180px] items-center justify-center text-center">
+                <p className="font-sans text-[17px] font-semibold text-black">
+                  Ask me for a briefing
+                </p>
+              </div>
+            ) : null}
+
+            {status === "loading" && !voiceActive ? (
+              <div className="flex min-h-[220px] items-center gap-4">
+                <Loader2 className="size-10 animate-spin text-black/30" />
+                <p className="font-sans text-[17px] font-semibold text-black">
+                  Generating your briefing...
+                </p>
+              </div>
+            ) : null}
+
+            {status === "error" && !voiceActive ? (
+              <div className="flex min-h-[180px] gap-3 rounded-[6px] border border-red-200 bg-red-50/80 p-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
+                <p className="font-sans text-[13px] text-red-900">
+                  {errorMessage ?? "Something went wrong."}
+                </p>
+              </div>
+            ) : null}
+
+            {status === "insufficient_source" && !voiceActive ? (
+              <div className="flex min-h-[180px] gap-3 rounded-[6px] border border-amber-200 bg-amber-50/80 p-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-900" />
+                <p className="font-sans text-[13px] text-amber-950">
+                  {errorMessage ??
+                    "The article text available here is too short for a reliable AI brief. Open the full story for complete context."}
+                </p>
+              </div>
+            ) : null}
+
+            {(status === "success" || status === "low_confidence") &&
+            data &&
+            !voiceActive ? (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-h-[318px] overflow-y-auto pr-1"
+              >
+                <p className="mb-4 font-sans text-[20px] font-semibold leading-snug text-black">
+                  {data.headline}
+                </p>
+                <div className="mb-4 h-px w-full bg-black/25" />
+                <ul className="list-disc space-y-3 pl-6 font-serif text-[18px] leading-[1.23] text-black">
+                  {data.key_points.map((k) => (
+                    <li key={k}>{k}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 font-serif text-[16px] leading-snug text-black">
+                  {data.summary}
+                </p>
+              </motion.div>
+            ) : null}
+
+            {recommendations.length > 0 && !voiceActive && status !== "loading" ? (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-h-[318px] overflow-y-auto pr-1"
+              >
+                <p className="mb-4 font-sans text-[20px] font-semibold leading-snug text-black">
+                  {recommendationsTitle ?? "Related articles"}
+                </p>
+                <div className="mb-2 h-px w-full bg-black/25" />
+                <div className="divide-y divide-black/25">
+                  {recommendations.map((article) => (
+                    <button
+                      key={article.id}
+                      type="button"
+                      onClick={() => onOpenRecommendation(article)}
+                      className="flex w-full items-center gap-3 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-serif text-[18px] font-semibold leading-[1.12] text-black">
+                          {article.title}
+                        </span>
+                        <span className="mt-1 block font-sans text-[13px] text-black/55">
+                          {article.source || "Recommended"}
+                        </span>
+                      </span>
+                      <ChevronRight className="size-6 shrink-0 text-black" aria-hidden />
+                    </button>
+                  ))}
                 </div>
-              ) : null}
+              </motion.div>
+            ) : null}
 
-              {status === "error" ? (
-                <div className="mt-3 flex gap-2 rounded-xl border border-red-200 bg-red-50/80 p-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
-                  <p className="font-sans text-[12px] text-red-900">
-                    {errorMessage ?? "Something went wrong."}
-                  </p>
-                </div>
-              ) : null}
-
-              {status === "insufficient_source" ? (
-                <div className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50/80 p-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-900" />
-                  <p className="font-sans text-[12px] text-amber-950">
-                    {errorMessage ??
-                      "The article text available here is too short for a reliable AI brief. Open the full story for complete context."}
-                  </p>
-                </div>
-              ) : null}
-
-              {(status === "success" || status === "low_confidence") && data ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-3 space-y-3"
-                >
-                  {status === "low_confidence" ? (
-                    <div className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50/70 p-2">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-900" />
-                      <p className="font-sans text-[11px] text-amber-950">
-                        Low confidence ({Math.round(data.confidence * 100)}%). Treat
-                        this as directional, not definitive.
-                      </p>
-                    </div>
-                  ) : null}
-
-                  <p className="font-serif text-[17px] leading-snug text-ink">
-                    {data.headline}
-                  </p>
-                  <p className="font-sans text-[13px] leading-relaxed text-ink">
-                    {data.summary}
-                  </p>
-                  <div>
-                    <p className="font-serif text-[12px] font-semibold text-ink">
-                      Key points
-                    </p>
-                    <ul className="mt-1 list-disc space-y-1 pl-5 font-sans text-[12px] text-ink-muted">
-                      {data.key_points.map((k) => (
-                        <li key={k}>{k}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="font-serif text-[12px] font-semibold text-ink">
-                      Why it matters
-                    </p>
-                    <p className="mt-1 font-sans text-[12px] leading-relaxed text-ink-muted">
-                      {data.why_it_matters}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-rule bg-paper px-3 py-2">
-                    <p className="font-serif text-[12px] font-semibold text-ink">
-                      Voice script
-                    </p>
-                    <p className="mt-1 font-serif text-[13px] leading-relaxed text-ink">
-                      {data.voice_script}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-rule bg-paper px-3 py-2">
-                    <p className="font-serif text-[12px] font-semibold text-ink">
-                      Limitations
-                    </p>
-                    <p className="mt-1 font-sans text-[11px] leading-relaxed text-ink-muted">
-                      {data.limitations}
-                    </p>
-                  </div>
-                  <p className="font-sans text-[10px] text-ink-faint">
-                    Model confidence: {Math.round(data.confidence * 100)}% · Mode:{" "}
-                    {mode} · Target read: {readingTimeMinutes} min
-                  </p>
-                </motion.div>
-              ) : null}
-            </div>
+            {recommendations.length === 0 && !voiceActive && status === "idle" && question.trim() ? (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-h-[318px] overflow-y-auto pr-1"
+              >
+                <p className="mb-4 font-sans text-[20px] font-semibold leading-snug text-black">
+                  No article recommendations found
+                </p>
+                <p className="font-sans text-[14px] leading-snug text-black/70">
+                  Try another follow-up command or open a different story to get suggestions.
+                </p>
+              </motion.div>
+            ) : null}
           </div>
         </motion.div>
       ) : null}
