@@ -12,6 +12,7 @@ import {
 import {
   PUTER_TTS_MAX_CHARS,
   getPuterPlaybackSnapshot,
+  prefetchPuterListen,
   replacePlaybackKeyIfMatch,
   runPuterListen,
   stopPuterPlayback,
@@ -57,6 +58,18 @@ export function ListenToArticleBar({
     setTruncationNote(null);
   }, [speechText, playbackKey]);
 
+  useEffect(() => {
+    const raw = speechText.trim();
+    if (!raw) return;
+    const id = window.setTimeout(() => {
+      prefetchPuterListen({
+        key,
+        speechText,
+      });
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [key, speechText]);
+
   /** Before paint: hand feed dock session to reader so the chip stays filled when opening a playing story. */
   useLayoutEffect(() => {
     replacePlaybackKeyIfMatch(`feed:${playbackKey}`, `reader:${playbackKey}`);
@@ -73,6 +86,11 @@ export function ListenToArticleBar({
 
   const onPress = useCallback(async () => {
     const raw = speechText.trim();
+    console.log("[tts/button] Listen button pressed", {
+      playbackKey,
+      chars: raw.length,
+      phase,
+    });
     if (!raw) {
       setErrorDetail("No article text to read.");
       window.setTimeout(() => setErrorDetail(null), 4000);
@@ -94,7 +112,15 @@ export function ListenToArticleBar({
         );
         window.setTimeout(() => setTruncationNote(null), 6000);
       }
+      console.log("[tts/button] Listen request handled", {
+        playbackKey,
+        didStartNewPlayback,
+      });
     } catch (e) {
+      console.error("[tts/button] Listen request failed", {
+        playbackKey,
+        message: e instanceof Error ? e.message : "Unknown error",
+      });
       setErrorDetail(
         e instanceof Error
           ? e.message
@@ -102,7 +128,7 @@ export function ListenToArticleBar({
       );
       window.setTimeout(() => setErrorDetail(null), 5000);
     }
-  }, [key, speechText, playbackKey, thumbnailUrl]);
+  }, [key, speechText, playbackKey, thumbnailUrl, phase]);
 
   const showPlayIcon =
     phase === "idle" || phase === "paused" || phase === "error";
@@ -145,7 +171,11 @@ export function ListenToArticleBar({
           <span className="font-sans text-[9px] leading-snug text-[#6b6b6b]">
             {truncationNote}
           </span>
-        ) : null}
+        ) : (
+          <span className="font-sans text-[9px] leading-snug text-[#6b6b6b]">
+            AI-generated voice
+          </span>
+        )}
       </span>
     </button>
   );
