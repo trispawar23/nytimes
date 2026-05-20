@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Article, FeedMode, NewsFeedResult, SummarizeApiResult } from "@/lib/types";
 import type { SummaryResponse } from "@/lib/types";
 import {
@@ -8,6 +8,13 @@ import {
   defaultBriefCacheKey,
   readerDisplayBriefCacheKey,
 } from "@/lib/summary-cache-key";
+import {
+  applyFeedFilters,
+  normalizeFeedSortBy,
+  topicFilterToTags,
+  type FeedSortBy,
+  type TopicFilter,
+} from "@/lib/feed-filters";
 import { modeToTags } from "@/lib/news-query";
 import { replacePlaybackKeyIfMatch } from "@/lib/puter-tts";
 import {
@@ -57,6 +64,12 @@ export default function ForYouClient() {
   const [newsMessage, setNewsMessage] = useState<string | null>(null);
 
   const [mode, setMode] = useState<FeedMode>("discover");
+  const [topicFilter, setTopicFilter] = useState<TopicFilter>("all");
+  const [sortBy, setSortBy] = useState<FeedSortBy>("all");
+
+  useEffect(() => {
+    setSortBy((current) => normalizeFeedSortBy(current));
+  }, []);
   /** Discover-only: carousel layout vs classic Great Read / Daily feed. Toggled by tapping Discover again. */
   const [discoverLayoutActive, setDiscoverLayoutActive] = useState(false);
   const [selected, setSelected] = useState<Article | null>(null);
@@ -90,8 +103,10 @@ export default function ForYouClient() {
   }>({ status: "idle", data: null });
 
   const modeRef = useRef(mode);
+  const topicFilterRef = useRef(topicFilter);
   const readingTimeRef = useRef(readingTime);
   modeRef.current = mode;
+  topicFilterRef.current = topicFilter;
   readingTimeRef.current = readingTime;
 
   const briefCacheRef = useRef<Record<string, BriefCacheEntry>>({});
@@ -117,7 +132,12 @@ export default function ForYouClient() {
    * stays stable when later read-meta updates patch in real minute counts.
    * (Re-sorting on every read-meta tick was the source of "discover is glitchy".)
    */
-  const feedLayoutArticles = articles;
+  const effectiveSortBy = normalizeFeedSortBy(sortBy);
+
+  const feedLayoutArticles = useMemo(
+    () => applyFeedFilters(articles, topicFilter, effectiveSortBy),
+    [articles, topicFilter, effectiveSortBy],
+  );
 
   const loadNews = useCallback(async (opts?: { force?: boolean }) => {
     const wasFirstLoad = firstLoadRef.current;
@@ -154,7 +174,10 @@ export default function ForYouClient() {
     setNewsLoading(true);
 
     const params = new URLSearchParams();
-    params.set("tags", modeToTags(currentMode));
+    params.set(
+      "tags",
+      topicFilterToTags(topicFilterRef.current, modeToTags(currentMode)),
+    );
     if (force) {
       // Bypass server feed cache + reshuffle only on explicit refresh.
       params.set("refresh", "1");
@@ -199,6 +222,16 @@ export default function ForYouClient() {
   useEffect(() => {
     void loadNews();
   }, [mode, loadNews]);
+
+  const topicFilterEffectMountedRef = useRef(false);
+  useEffect(() => {
+    if (!topicFilterEffectMountedRef.current) {
+      topicFilterEffectMountedRef.current = true;
+      return;
+    }
+    articlesByModeRef.current.clear();
+    void loadNews({ force: true });
+  }, [topicFilter, loadNews]);
 
   /**
    * If the app was hidden for a while and the user returns, treat it like
@@ -848,6 +881,10 @@ export default function ForYouClient() {
               }
               onVoicePress={handleHeaderVoice}
               voiceDisabled={newsLoading || articles.length === 0}
+              topicFilter={topicFilter}
+              onTopicFilterChange={setTopicFilter}
+              sortBy={effectiveSortBy}
+              onSortByChange={setSortBy}
             />
 
             <PullToRefresh

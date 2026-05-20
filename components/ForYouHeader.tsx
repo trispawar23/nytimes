@@ -4,13 +4,20 @@ import {
   ArrowUpRight,
   BatteryFull,
   Bookmark,
-  ChevronDown,
   Mic,
   Settings,
   Wifi,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import {
+  FEED_SORT_OPTIONS,
+  TOPIC_FILTER_OPTIONS,
+  feedSortOption,
+  type FeedSortBy,
+  type TopicFilter,
+} from "@/lib/feed-filters";
 import { ModeSelector } from "./ModeSelector";
+import { HeaderPillDropdown } from "./HeaderPillDropdown";
 import type { FeedMode } from "@/lib/types";
 
 type Props = {
@@ -21,6 +28,10 @@ type Props = {
   greetingName?: string;
   onVoicePress: () => void;
   voiceDisabled?: boolean;
+  topicFilter: TopicFilter;
+  onTopicFilterChange: (topic: TopicFilter) => void;
+  sortBy: FeedSortBy;
+  onSortByChange: (sort: FeedSortBy) => void;
 };
 
 /** iOS-style cellular signal (right side of status bar). */
@@ -77,10 +88,24 @@ export function ForYouHeader({
   greetingName = "there",
   onVoicePress,
   voiceDisabled,
+  topicFilter,
+  onTopicFilterChange,
+  sortBy,
+  onSortByChange,
 }: Props) {
   const statusTime = useStatusClock();
   const [compact, setCompact] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
   const lastScrollTopRef = useRef(0);
+  const anyMenuOpen = filtersOpen || sortOpen;
+
+  useEffect(() => {
+    if (compact) {
+      setFiltersOpen(false);
+      setSortOpen(false);
+    }
+  }, [compact]);
 
   /** Auto-hide mode selector + filters row when reader scrolls down; reveal on scroll up. */
   useEffect(() => {
@@ -191,7 +216,9 @@ export function ForYouHeader({
               : "grid-rows-[1fr] opacity-100"
           }`}
         >
-          <div className="min-h-0 overflow-hidden">
+          <div
+            className={`min-h-0 ${anyMenuOpen ? "overflow-visible" : "overflow-hidden"}`}
+          >
             <div className="flex flex-col gap-[10.27px] pb-2">
               <ModeSelector
                 value={mode}
@@ -200,26 +227,39 @@ export function ForYouHeader({
               />
 
               <div className="flex w-full min-w-0 items-center justify-between gap-2 px-[10.27px]">
-                <div className="flex min-w-0 flex-wrap items-center gap-[10.27px]">
-                  <button
-                    type="button"
-                    className="flex items-center gap-[10.27px] rounded-[12.33px] bg-white px-[10.27px] py-[5.14px] font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[14.38px] font-medium leading-[21.57px] text-black outline outline-1 -outline-offset-1 outline-[#E1E1E1] hover:bg-[#fafafa]"
-                    style={{ outlineWidth: "1.027px" }}
-                  >
-                    Filters
-                    <span className="relative inline-flex h-[24.66px] w-[24.66px] items-center justify-center p-[6px]">
-                      <span className="absolute left-1/2 top-1/2 h-[1.8px] w-[12.63px] -translate-x-1/2 -translate-y-1/2 bg-black" />
-                      <span className="absolute left-1/2 top-1/2 h-[12.63px] w-[1.8px] -translate-x-1/2 -translate-y-1/2 bg-black" />
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="flex items-center gap-[10.27px] rounded-[12.33px] bg-white px-[10.27px] py-[5.14px] font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[14.38px] font-medium leading-[21.57px] text-black outline outline-1 -outline-offset-1 outline-[#E1E1E1] hover:bg-[#fafafa]"
-                    style={{ outlineWidth: "1.027px" }}
-                  >
-                    Sort by
-                    <ChevronDown className="h-4 w-4" strokeWidth={2} />
-                  </button>
+                <div className="relative z-40 flex min-w-0 flex-wrap items-center gap-[10.27px]">
+                  <HeaderPillDropdown
+                    label="Filters"
+                    items={TOPIC_FILTER_OPTIONS}
+                    value={topicFilter}
+                    onChange={onTopicFilterChange}
+                    open={filtersOpen}
+                    onOpenChange={(open) => {
+                      setFiltersOpen(open);
+                      if (open) setSortOpen(false);
+                    }}
+                    trailingIcon="plus"
+                    menuScrollable
+                    menuCompact
+                  />
+                  <HeaderPillDropdown
+                    label="Sort by"
+                    activeLabel={
+                      sortBy === "all"
+                        ? "Sort by"
+                        : `Sort: ${feedSortOption(sortBy).label}`
+                    }
+                    items={FEED_SORT_OPTIONS}
+                    value={sortBy}
+                    onChange={onSortByChange}
+                    open={sortOpen}
+                    onOpenChange={(open) => {
+                      setSortOpen(open);
+                      if (open) setFiltersOpen(false);
+                    }}
+                    trailingIcon="chevron"
+                    menuCompact
+                  />
                 </div>
                 <button
                   type="button"

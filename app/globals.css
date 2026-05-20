@@ -28,3 +28,24 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Visible scrollbar for compact header dropdown lists */
+.pill-menu-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #b8b8b8 #efefef;
+}
+.pill-menu-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.pill-menu-scroll::-webkit-scrollbar-track {
+  margin: 4px 0;
+  background: #efefef;
+  border-radius: 4px;
+}
+.pill-menu-scroll::-webkit-scrollbar-thumb {
+  background: #b8b8b8;
+  border-radius: 4px;
+}

@@ -10,9 +10,4 @@ export const FIGMA_MODE_ICONS = {
   catchup: "https://www.figma.com/api/mcp/asset/0cbf8f35-c493-47eb-9888-5c9ac8fecb8d",
 } as const;
 
-export const FIGMA_NAV_ASSETS = {
-  home: "https://www.figma.com/api/mcp/asset/06ff7873-d57c-4753-9ef3-94f72a9aa627",
-  listen: "https://www.figma.com/api/mcp/asset/2178846f-8ecc-49b8-998c-cacf09c5440a",
-  play: "https://www.figma.com/api/mcp/asset/d8241911-b2b0-43ed-b936-677b1f1da494",
-  profile: "https://www.figma.com/api/mcp/asset/1ee01755-34ab-44b6-bce9-e277b0def03f",
-} as const;
+/** Bottom nav icons live in `public/nav/` — see `lib/nav-assets.ts`. */
