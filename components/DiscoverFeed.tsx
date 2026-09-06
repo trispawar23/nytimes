@@ -105,7 +105,7 @@ export function DiscoverFeed({
 }: Props) {
   const shell = "w-full min-w-0 px-4";
 
-  if (loading) {
+  if (loading && articles.length === 0) {
     return (
       <div className={`${shell} space-y-5 pb-8 pt-3`}>
         <div className="h-4 w-40 animate-pulse rounded bg-[#e4e4e4]" />

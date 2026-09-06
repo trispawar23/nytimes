@@ -15,6 +15,7 @@ import {
   type FeedSortBy,
   type TopicFilter,
 } from "@/lib/feed-filters";
+import { MOCK_ARTICLES } from "@/lib/mock-news";
 import { modeToTags } from "@/lib/news-query";
 import { replacePlaybackKeyIfMatch } from "@/lib/puter-tts";
 import {
@@ -58,8 +59,12 @@ function mapSummarizeStatus(
   };
 }
 
+/** Instant first paint while `/api/news` resolves (replaced when live data arrives). */
+const PRELIMINARY_ARTICLES = orderArticlesForLongReadSections(MOCK_ARTICLES);
+
 export default function ForYouClient() {
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [articles, setArticles] = useState<Article[]>(PRELIMINARY_ARTICLES);
+  /** True until the first live `/api/news` response; feeds still paint preliminary articles. */
   const [newsLoading, setNewsLoading] = useState(true);
   const [newsMessage, setNewsMessage] = useState<string | null>(null);
 
@@ -120,12 +125,9 @@ export default function ForYouClient() {
   const articlesByModeRef = useRef<Map<FeedMode, Article[]>>(new Map());
   /** Wall-clock for the last successful load; visibility wake refresh uses this. */
   const lastLoadAtRef = useRef<number>(0);
-  /**
-   * First `loadNews` of this React tree's lifetime is implicitly a refresh
-   * so that a fresh tab / page reload / "reopen the app" pulls a new shuffle
-   * past the server's in-memory feed cache.
-   */
-  const firstLoadRef = useRef(true);
+  /** Latest articles for soft-loading decisions inside `loadNews` (avoids blanking). */
+  const articlesRef = useRef(articles);
+  articlesRef.current = articles;
 
   /**
    * Articles arrive already long-read-ordered from `loadNews`, so the layout
@@ -140,13 +142,12 @@ export default function ForYouClient() {
   );
 
   const loadNews = useCallback(async (opts?: { force?: boolean }) => {
-    const wasFirstLoad = firstLoadRef.current;
-    firstLoadRef.current = false;
     /**
-     * Cold start (reload / new tab / "reopen the app") implicitly forces a
-     * fresh shuffle. After that, only explicit refresh actions force.
+     * Only explicit refresh (pull-to-refresh, topic change, visibility wake)
+     * bypasses the server feed cache. Cold start reuses cache when warm so
+     * the feed can paint from preliminary data then swap in live quickly.
      */
-    const force = opts?.force ?? wasFirstLoad;
+    const force = opts?.force ?? false;
     const currentMode = modeRef.current;
 
     feedGenerationRef.current += 1;
@@ -171,7 +172,10 @@ export default function ForYouClient() {
       setReaderShortBrief({ status: "idle", data: null, error: undefined });
     }
 
-    setNewsLoading(true);
+    // Soft loading: keep preliminary / previous cards visible; only skeleton when empty.
+    if (articlesRef.current.length === 0) {
+      setNewsLoading(true);
+    }
 
     const params = new URLSearchParams();
     params.set(
@@ -198,16 +202,18 @@ export default function ForYouClient() {
         Array.isArray(json.articles) && json.articles.length > 0
           ? orderArticlesForLongReadSections(json.articles)
           : json.articles;
-      articlesByModeRef.current.set(currentMode, ordered);
-      lastLoadAtRef.current = Date.now();
-      setArticles(ordered);
+      if (ordered.length > 0) {
+        articlesByModeRef.current.set(currentMode, ordered);
+        lastLoadAtRef.current = Date.now();
+        setArticles(ordered);
+      }
       if (!json.ok) {
         setNewsMessage(json.error);
       } else {
         setNewsMessage(null);
       }
     } catch {
-      setArticles([]);
+      // Keep preliminary / last-good articles on the screen.
       setNewsMessage("Could not load the feed.");
     } finally {
       setNewsLoading(false);
@@ -217,7 +223,7 @@ export default function ForYouClient() {
   /**
    * Load on mount; on mode change, prefer the per-mode snapshot.
    * Articles only re-shuffle on explicit refresh (pull-to-refresh, long-absence
-   * wake, or full page reload — each starts with an empty `articlesByModeRef`).
+   * wake). Cold start shows preliminary articles immediately, then swaps in live.
    */
   useEffect(() => {
     void loadNews();

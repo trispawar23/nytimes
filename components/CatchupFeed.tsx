@@ -286,7 +286,7 @@ export function CatchupFeed({
     !!expandedSecondary,
   );
 
-  if (loading) {
+  if (loading && articles.length === 0) {
     return (
       <div className={`${shell} space-y-4 pb-28 pt-3`}>
         <div className="mx-auto h-[480px] max-w-[365px] animate-pulse rounded-sm bg-[#e8e8e8]" />

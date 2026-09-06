@@ -48,7 +48,7 @@ export function RelaxFeed({
   const wordArt = articles[3];
   const wordLabel = pickWordLabel();
 
-  if (loading) {
+  if (loading && articles.length === 0) {
     return (
       <div className={`${shell} flex flex-col gap-[10px] pb-28 pt-[10px]`}>
         <div className="mx-auto aspect-[370/677] w-full max-w-[370px] animate-pulse bg-[#e4e4e4]" />

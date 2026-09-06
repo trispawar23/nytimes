@@ -113,7 +113,7 @@ export function ForYouFeed({
 }: Props) {
   const shell = "w-full min-w-0 max-w-full px-[16.44px]";
 
-  if (loading) {
+  if (loading && articles.length === 0) {
     return (
       <div className={`${shell} space-y-[10.27px] pb-6 pt-[10px]`}>
         <div className="h-4 w-32 animate-pulse rounded bg-[#e8e8e8]" />
